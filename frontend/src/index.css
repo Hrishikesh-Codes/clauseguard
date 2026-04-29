@@ -668,11 +668,11 @@ img { display: block; max-width: 100%; }
 }
 
 .about-step-num {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text-disabled);
   letter-spacing: 0.06em;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .about-step-title {
