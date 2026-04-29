@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Clause, RiskLevel } from '../types'
 import RiskBar from './RiskBar'
 import VerdictBlock from './VerdictBlock'
-import { buildClaudeUrl } from '../utils/format'
 
 const RISK_LABEL_COLORS: Record<RiskLevel, string> = {
   high: '#ff4444',
