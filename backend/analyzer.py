@@ -24,7 +24,13 @@ For each clause you receive, return a JSON object with these exact fields:
 Return a JSON object with a single key "clauses" containing an array of these objects. Return only valid JSON, no markdown, no preamble."""
 
 
+MAX_CLAUSES = 20
+MAX_CLAUSE_CHARS = 600
+
+
 def build_user_prompt(clauses: List[str], doc_type: str, jurisdiction: str = "Unknown") -> str:
+    # Cap clause count and truncate long clauses to stay within TPM limits
+    clauses = clauses[:MAX_CLAUSES]
     parts = [
         f"Document type: {doc_type}",
         f"State/jurisdiction: {jurisdiction}",
@@ -35,7 +41,7 @@ def build_user_prompt(clauses: List[str], doc_type: str, jurisdiction: str = "Un
 
     for i, clause in enumerate(clauses, 1):
         parts.append(f"[CLAUSE {i}]")
-        parts.append(clause)
+        parts.append(clause[:MAX_CLAUSE_CHARS])
         parts.append("")
 
     parts.append("Analyze each clause and return the JSON as specified.")
