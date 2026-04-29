@@ -24,13 +24,53 @@ For each clause you receive, return a JSON object with these exact fields:
 Return a JSON object with a single key "clauses" containing an array of these objects. Return only valid JSON, no markdown, no preamble."""
 
 
-MAX_CLAUSES = 12
+MAX_CLAUSES = 16
 MAX_CLAUSE_CHARS = 500
+
+# Keywords by priority tier — higher score = more important to analyze
+PRIORITY_KEYWORDS: List[tuple[int, List[str]]] = [
+    (10, ["terminat", "early terminat", "break lease", "lease break"]),
+    (10, ["automat", "renew", "holdover", "month-to-month"]),
+    (9,  ["entry", "access", "landlord enter", "right to enter", "inspection"]),
+    (9,  ["secur", "deposit", "deduct", "withhold"]),
+    (8,  ["late fee", "late charge", "grace period", "penalty"]),
+    (8,  ["subleas", "sublet", "assign", "transfer"]),
+    (7,  ["liabil", "indemnif", "hold harmless", "waiver"]),
+    (7,  ["arbitrat", "mediat", "dispute", "governing law", "jurisdiction"]),
+    (6,  ["pet", "animal", "dog", "cat"]),
+    (6,  ["utilities", "electric", "gas", "water", "trash"]),
+    (6,  ["maintenan", "repair", "damage", "condition"]),
+    (5,  ["noise", "nuisance", "quiet enjoyment", "disturbance"]),
+    (5,  ["insurance", "renter", "renters"]),
+    (5,  ["parking", "vehicle", "garage"]),
+    (5,  ["guest", "occupant", "visitor"]),
+    (4,  ["alteration", "modif", "improvement", "paint"]),
+    (4,  ["notice", "written notice", "days notice"]),
+]
+
+
+def score_clause(text: str) -> int:
+    """Score a clause by keyword importance. Higher = more important to analyze."""
+    lower = text.lower()
+    score = 0
+    for points, keywords in PRIORITY_KEYWORDS:
+        if any(kw in lower for kw in keywords):
+            score += points
+    return score
+
+
+def select_top_clauses(clauses: List[str]) -> List[str]:
+    """Score all clauses and return the top MAX_CLAUSES by importance."""
+    if len(clauses) <= MAX_CLAUSES:
+        return clauses
+    scored = sorted(enumerate(clauses), key=lambda x: score_clause(x[1]), reverse=True)
+    top_indices = sorted(i for i, _ in scored[:MAX_CLAUSES])
+    return [clauses[i] for i in top_indices]
 
 
 def build_user_prompt(clauses: List[str], doc_type: str, jurisdiction: str = "Unknown") -> str:
-    # Cap clause count and truncate long clauses to stay within TPM limits
-    clauses = clauses[:MAX_CLAUSES]
+    # Select top clauses by importance, then truncate each for token efficiency
+    clauses = select_top_clauses(clauses)
     parts = [
         f"Document type: {doc_type}",
         f"State/jurisdiction: {jurisdiction}",
