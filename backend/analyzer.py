@@ -24,8 +24,8 @@ For each clause you receive, return a JSON object with these exact fields:
 Return a JSON object with a single key "clauses" containing an array of these objects. Return only valid JSON, no markdown, no preamble."""
 
 
-MAX_CLAUSES = 20
-MAX_CLAUSE_CHARS = 600
+MAX_CLAUSES = 12
+MAX_CLAUSE_CHARS = 500
 
 
 def build_user_prompt(clauses: List[str], doc_type: str, jurisdiction: str = "Unknown") -> str:
