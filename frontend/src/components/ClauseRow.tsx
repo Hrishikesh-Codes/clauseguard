@@ -46,15 +46,6 @@ export default function ClauseRow({ clause }: Props) {
       <div className="clause-right">
         <p className="clause-explanation">{clause.plain_english}</p>
         <VerdictBlock verdict={clause.verdict} riskLevel={clause.risk_level as RiskLevel} />
-        <a
-          className="clause-action"
-          href={buildClaudeUrl(clause.action_prompt)}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={e => e.stopPropagation()}
-        >
-          {clause.action_label} ↗
-        </a>
       </div>
     </div>
   )

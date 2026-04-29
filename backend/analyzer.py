@@ -16,9 +16,9 @@ For each clause you receive, return a JSON object with these exact fields:
 - risk_level: exactly one of "high", "medium", "standard", "favorable"
 - risk_score: integer 1-5 (how many risk bar segments to fill)
 - excerpt: the most important 1-2 sentences from the original clause text, quoted exactly
-- plain_english: 3-5 sentences explaining what this clause means in practice using everyday scenarios. Write as if explaining to a first-time renter who has never signed a lease.
-- verdict: 3-5 sentences starting with "This is [good/bad/standard/favorable] because..." explaining: (a) why it is good or bad, (b) how it compares to what is standard or legally typical, (c) exactly what the reader should do
-- action_label: short action text for the action link (e.g. "Draft negotiation email", "Check state law", "Draft roommate agreement", "Move-in checklist")
+- plain_english: 3-5 sentences that state the actual rules this clause imposes — specific amounts, timeframes, conditions, and what you can or cannot do. Do not say "review carefully" — instead summarize what the clause actually says. Example: "You must give 60 days written notice before moving out. If you don't, you'll be charged rent for the full 60 days even after you leave. The landlord can enter your unit with only 12 hours notice for inspections."
+- verdict: 2-3 sentences starting with "This is [good/bad/standard/favorable] because..." that explain why this matters to the reader and give one concrete action they should take. Never say "review carefully" — instead say what specifically to negotiate, ask about, or watch out for.
+- action_label: short action text (e.g. "Draft negotiation email", "Check state law", "Draft roommate agreement", "Move-in checklist")
 - action_prompt: the full prompt to send to an AI when the user clicks the action link
 
 Return a JSON object with a single key "clauses" containing an array of these objects. Return only valid JSON, no markdown, no preamble."""

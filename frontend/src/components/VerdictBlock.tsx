@@ -3,7 +3,7 @@ import type { RiskLevel } from '../types'
 const VERDICT_STYLES: Record<RiskLevel, { bg: string; border: string; color: string }> = {
   high: { bg: '#1a0a0a', border: '#ff6b6b', color: '#ff6b6b' },
   medium: { bg: '#1a1200', border: '#e8b84b', color: '#e8b84b' },
-  standard: { bg: '#111', border: '#555', color: '#aaa' },
+  standard: { bg: '#111', border: '#555', color: '#f0f0f0' },
   favorable: { bg: '#071a10', border: '#3ecf8e', color: '#3ecf8e' },
 }
 
