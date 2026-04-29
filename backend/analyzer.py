@@ -146,8 +146,8 @@ def compute_safety(clauses: List[Clause]) -> SafetyScore:
     favorable = sum(1 for c in clauses if c.risk_level == "favorable")
 
     score = 100
-    score -= high * 20
-    score -= medium * 8
+    score -= high * 15
+    score -= medium * 5
     score += favorable * 5
     score = max(0, min(100, score))
 
