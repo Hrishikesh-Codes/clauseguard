@@ -1,0 +1,9 @@
+{
+  "buildCommand": "cd frontend && npm install --cache /tmp/npm-cache && npm run build",
+  "outputDirectory": "frontend/dist",
+  "installCommand": "echo skip",
+  "framework": null,
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
