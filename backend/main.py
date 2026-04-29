@@ -89,6 +89,9 @@ async def analyze(file: UploadFile = File(...)):
     try:
         analyzed_clauses, safety = analyze_document(clauses_text, doc_type, full_text)
     except Exception as e:
+        import traceback
+        print("GROQ ERROR:", str(e))
+        traceback.print_exc()
         raise HTTPException(
             status_code=500,
             detail={"error": "Analysis failed. Please try again in a moment.", "code": "GROQ_ERROR"},

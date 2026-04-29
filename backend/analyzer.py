@@ -70,7 +70,7 @@ def call_groq(clauses: List[str], doc_type: str, full_text: str) -> Dict[str, An
     user_prompt = build_user_prompt(clauses, doc_type, jurisdiction)
 
     response = client.chat.completions.create(
-        model="llama-3.1-70b-versatile",
+        model="llama-3.3-70b-versatile",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
