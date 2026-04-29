@@ -27,10 +27,26 @@ export interface SafetyScore {
   favorable_count: number
 }
 
+export interface LeaseSummary {
+  landlord: string | null
+  tenant: string | null
+  property_address: string | null
+  lease_start: string | null
+  lease_end: string | null
+  lease_term: string | null
+  monthly_rent: string | null
+  payment_due_date: string | null
+  security_deposit: string | null
+  late_fee: string | null
+  move_in_notes: string | null
+  move_out_notes: string | null
+}
+
 export interface AnalysisResult {
   meta: DocumentMeta
   safety: SafetyScore
   clauses: Clause[]
+  summary: LeaseSummary | null
   analyzedAt: string // ISO timestamp
 }
 

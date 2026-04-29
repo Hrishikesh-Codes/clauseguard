@@ -318,6 +318,63 @@ img { display: block; max-width: 100%; }
   color: var(--text-primary);
 }
 
+/* ─── Lease summary card ──────────────────────────────────────────────────── */
+.summary-card {
+  border-bottom: 0.5px solid var(--border-section);
+  padding: 28px 32px;
+}
+
+.summary-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: 0.5px solid var(--border-row);
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  border-bottom: 0.5px solid var(--border-row);
+  border-right: 0.5px solid var(--border-row);
+}
+
+.summary-row:nth-child(even) {
+  border-right: none;
+}
+
+.summary-row:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+.summary-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  border-right: 0.5px solid var(--border-row);
+  display: flex;
+  align-items: flex-start;
+}
+
+.summary-value {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  padding: 10px 14px;
+  line-height: 1.5;
+}
+
 /* ─── Filter tabs ─────────────────────────────────────────────────────────── */
 .filter-tabs {
   display: flex;
@@ -755,6 +812,11 @@ img { display: block; max-width: 100%; }
   }
 
   .results-hero { padding: 24px 20px 20px; }
+  .summary-card { padding: 20px; }
+  .summary-grid { grid-template-columns: 1fr; }
+  .summary-row { border-right: none; }
+  .summary-row:nth-last-child(-n+2) { border-bottom: 0.5px solid var(--border-row); }
+  .summary-row:last-child { border-bottom: none; }
   .nav { padding: 0 16px; }
   .nav-links { gap: 16px; }
   .nav-link { font-size: 12px; letter-spacing: 0.05em; }

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAnalysis } from '../context/AnalysisContext'
 import Nav from '../components/Nav'
 import ScoreStrip from '../components/ScoreStrip'
+import LeaseSummaryCard from '../components/LeaseSummaryCard'
 import FilterTabs from '../components/FilterTabs'
 import ClauseRow from '../components/ClauseRow'
 import BottomBar from '../components/BottomBar'
@@ -58,6 +59,7 @@ export default function Results() {
       </div>
 
       <ScoreStrip safety={safety} />
+      {current.summary && <LeaseSummaryCard summary={current.summary} />}
       <FilterTabs active={activeTab} onChange={setActiveTab} counts={counts} />
 
       <div className="clause-list">

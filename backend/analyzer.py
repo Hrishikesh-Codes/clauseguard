@@ -5,7 +5,7 @@ from typing import List, Dict, Any
 
 from groq import Groq
 
-from models import Clause, SafetyScore
+from models import Clause, SafetyScore, LeaseSummary
 
 
 SYSTEM_PROMPT = """You are a legal document analyzer specializing in residential leases and contracts. Your job is to analyze clauses and explain them clearly to people who have never read a legal document before. You are not a lawyer and do not give legal advice — you explain what things mean in plain English.
@@ -160,9 +160,67 @@ def compute_safety(clauses: List[Clause]) -> SafetyScore:
     )
 
 
-def analyze_document(clauses: List[str], doc_type: str, full_text: str) -> tuple[List[Clause], SafetyScore]:
-    """Main entry point: analyze all clauses, return (clauses, safety_score)."""
+SUMMARY_SYSTEM_PROMPT = """You are a document parser. Extract key facts from a lease or contract and return them as a JSON object. If a field cannot be found in the text, use null. Return only valid JSON, no markdown, no preamble.
+
+Return exactly this structure:
+{
+  "landlord": "full name or company of the landlord/lessor",
+  "tenant": "full name(s) of the tenant(s)/lessee(s)",
+  "property_address": "full property address or description",
+  "lease_start": "lease start date (e.g. April 9, 2025)",
+  "lease_end": "lease end date (e.g. April 8, 2026)",
+  "lease_term": "duration (e.g. 12 months, 1 year)",
+  "monthly_rent": "rent amount per month (e.g. $1,200/month)",
+  "payment_due_date": "when rent is due (e.g. 1st of each month)",
+  "security_deposit": "security deposit amount",
+  "late_fee": "late fee amount and when it applies",
+  "move_in_notes": "key move-in conditions, fees, or checklist requirements (1-2 sentences)",
+  "move_out_notes": "notice required and key move-out conditions (1-2 sentences)"
+}"""
+
+
+def extract_summary(full_text: str) -> LeaseSummary:
+    """Extract key lease facts using a fast small model. Returns LeaseSummary."""
+    client = Groq()
+    # Use first 4000 chars — enough to capture the main terms
+    snippet = full_text[:4000]
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": SUMMARY_SYSTEM_PROMPT},
+                {"role": "user", "content": f"Extract the key facts from this document:\n\n{snippet}"},
+            ],
+            temperature=0.1,
+            max_tokens=1024,
+        )
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        data = json.loads(raw)
+        return LeaseSummary(
+            landlord=data.get("landlord"),
+            tenant=data.get("tenant"),
+            property_address=data.get("property_address"),
+            lease_start=data.get("lease_start"),
+            lease_end=data.get("lease_end"),
+            lease_term=data.get("lease_term"),
+            monthly_rent=data.get("monthly_rent"),
+            payment_due_date=data.get("payment_due_date"),
+            security_deposit=data.get("security_deposit"),
+            late_fee=data.get("late_fee"),
+            move_in_notes=data.get("move_in_notes"),
+            move_out_notes=data.get("move_out_notes"),
+        )
+    except Exception:
+        return LeaseSummary()
+
+
+def analyze_document(clauses: List[str], doc_type: str, full_text: str) -> tuple[List[Clause], SafetyScore, LeaseSummary]:
+    """Main entry point: analyze all clauses, return (clauses, safety_score, summary)."""
     raw = call_groq(clauses, doc_type, full_text)
     parsed = parse_clauses(raw)
     safety = compute_safety(parsed)
-    return parsed, safety
+    summary = extract_summary(full_text)
+    return parsed, safety, summary

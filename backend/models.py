@@ -31,10 +31,26 @@ class SafetyScore(BaseModel):
     favorable_count: int
 
 
+class LeaseSummary(BaseModel):
+    landlord: Optional[str] = None
+    tenant: Optional[str] = None
+    property_address: Optional[str] = None
+    lease_start: Optional[str] = None
+    lease_end: Optional[str] = None
+    lease_term: Optional[str] = None
+    monthly_rent: Optional[str] = None
+    payment_due_date: Optional[str] = None
+    security_deposit: Optional[str] = None
+    late_fee: Optional[str] = None
+    move_in_notes: Optional[str] = None
+    move_out_notes: Optional[str] = None
+
+
 class AnalysisResponse(BaseModel):
     meta: DocumentMeta
     safety: SafetyScore
     clauses: List[Clause]
+    summary: Optional[LeaseSummary] = None
 
 
 class ErrorResponse(BaseModel):
