@@ -22,16 +22,6 @@ export default function About() {
         </section>
 
         <section className="about-section">
-          <h2 className="about-subheading">Legal disclaimer</h2>
-          <p className="about-body about-disclaimer">
-            ClauseGuard is not a law firm and does not provide legal advice. The analysis provided is for
-            informational and educational purposes only. Nothing here constitutes legal advice, and you should
-            consult a qualified attorney before making any legal decisions. ClauseGuard makes no warranties
-            about the accuracy or completeness of any analysis.
-          </p>
-        </section>
-
-        <section className="about-section">
           <h2 className="about-subheading">What we analyze</h2>
           <div className="about-grid">
             {[
@@ -74,6 +64,16 @@ export default function About() {
           <p className="about-body">
             Your document is never stored. PDFs are processed in memory and discarded immediately after analysis.
             We do not log document contents. No account is required. The app is fully stateless on the backend.
+          </p>
+        </section>
+
+        <section className="about-section">
+          <h2 className="about-subheading">Legal disclaimer</h2>
+          <p className="about-body about-disclaimer">
+            ClauseGuard is not a law firm and does not provide legal advice. The analysis provided is for
+            informational and educational purposes only. Nothing here constitutes legal advice, and you should
+            consult a qualified attorney before making any legal decisions. ClauseGuard makes no warranties
+            about the accuracy or completeness of any analysis.
           </p>
         </section>
       </div>
