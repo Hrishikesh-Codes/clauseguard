@@ -1,0 +1,33 @@
+name: Sync backend to Hugging Face Space
+
+# Auto-deploys the backend/ folder to the HF Space on every push to main
+# that touches backend code. Also runnable manually from the Actions tab.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Push backend/ to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Export only git-tracked backend files (no .venv / __pycache__)
+          mkdir -p /tmp/space
+          git archive HEAD:backend | tar -x -C /tmp/space
+
+          cd /tmp/space
+          git init -b main
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -A
+          git commit -m "Sync from GitHub ${GITHUB_SHA}"
+          git push --force "https://HrishiCodes:${HF_TOKEN}@huggingface.co/spaces/HrishiCodes/clauseguard-api" main
