@@ -68,6 +68,14 @@ export default function Results() {
       </div>
 
       <ScoreStrip safety={safety} />
+      {safety.confidence && safety.confidence !== 'high' && safety.confidence_note && (
+        <div className={`score-notice score-notice--${safety.confidence}`}>
+          <span className="score-notice-tag">
+            {safety.confidence === 'low' ? 'Cannot score reliably' : 'Partial read'}
+          </span>
+          <span className="score-notice-text">{safety.confidence_note}</span>
+        </div>
+      )}
       <RiskBreakdown safety={safety} />
       {current.summary && <SummaryCard summary={current.summary} />}
       <FilterTabs active={activeTab} onChange={setActiveTab} counts={counts} />

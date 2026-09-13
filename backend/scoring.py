@@ -27,7 +27,7 @@ to include some tenant-friendly boilerplate.
 
 import re
 from dataclasses import dataclass, field
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 # ── Severity weights ────────────────────────────────────────────────────────────
 CRITICAL = 14
@@ -135,8 +135,13 @@ RISK_RULES: List[Rule] = [
     ), category="Renewal"),
 
     Rule("no_sublet_absolute", "Subletting or assignment flatly prohibited", HIGH, (
-        r"(shall not|may not|must not|is prohibited from|no)[^.]{0,70}(sublet|subleas\w+|assign\w*)",
+        # "sublet" is unambiguous on its own.
+        r"(shall not|may not|must not|is prohibited from|no)[^.]{0,70}(sublet|subleas\w+)",
         r"(sublet\w*|subleas\w+)[^.]{0,40}(not (allowed|permitted)|prohibited)",
+        # "assign" is not: it also appears in IP-assignment clauses, so require
+        # that it is the lease or premises being assigned.
+        r"(shall not|may not|must not|is prohibited from)[^.]{0,60}assign\w*[^.]{0,90}(lease|premises|tenancy|unit|apartment)",
+        r"(lease|premises|tenancy)[^.]{0,60}(shall not|may not) be assign\w*",
     ), exclude=(
         r"(sublet|subleas\w+|assign\w*)[^.]{0,90}(prior )?(written )?consent",
         r"(prior )?(written )?consent[^.]{0,90}(sublet|subleas\w+|assign\w*)",
@@ -276,7 +281,7 @@ RISK_RULES: List[Rule] = [
 
     Rule("ip_assignment_broad", "Broad assignment of your intellectual property", HIGH, (
         r"(assign\w*|hereby assigns?)[^.]{0,120}(invention|idea|improvement|work product|intellectual property|copyright|patent)",
-        r"(invention|idea|improvement|work product)[^.]{0,90}(is|are|shall be)[^.]{0,40}(assigned|the (sole )?property) ",
+        r"(invention|idea|improvement|work product)\w*[^.]{0,90}(?:is|are|shall be|will be)\s+(?:hereby\s+|irrevocably\s+|automatically\s+)*(?:assigned|the (?:sole )?property)\b",
     ), exclude=(
         r"(sublet|subleas\w+|assign\w*)[^.]{0,60}(the )?(lease|premises)",
     ), category="Intellectual property"),
@@ -323,6 +328,85 @@ RISK_RULES: List[Rule] = [
 
     Rule("short_return_window", "Very short deadline to return or destroy materials", LOW, (
         r"(within|no later than)[^.]{0,30}(twenty-?four|forty-?eight|24|48)\s*(\(\d+\)\s*)?hours?[^.]{0,90}(return|destro\w+|certif\w+)",
+    ), category="Confidentiality"),
+# ---- Additional lease provisions a reviewer would flag ---------------------
+    Rule("rules_by_reference", "Binds you to rules not attached to the lease", HIGH, (
+        r"(rules and regulations|community (policies|guidelines)|handbook|addend\w+)[^.]{0,120}(incorporated[^.]{0,30}by reference|as (may be )?(amended|modified)|posted)",
+    ), category="Unilateral terms"),
+
+    Rule("one_strike_eviction", "Single violation can end the tenancy", HIGH, (
+        r"(crime-?free|one[- ]strike|zero[- ]tolerance|single violation|any violation)[^.]{0,110}(terminat\w+|evict\w+|immediate)",
+    ), category="Default"),
+
+    Rule("guarantor_unlimited", "Guarantor or co-signer liability is unlimited", HIGH, (
+        r"(guarantor|co-?signer|surety)[^.]{0,140}(unconditional\w*|absolute\w*|all (obligations|amounts|sums))",
+    ), category="Liability"),
+
+    Rule("waive_itemized_deductions", "Waives your right to an itemized deposit statement", HIGH, (
+        r"waiv\w*[^.]{0,100}itemi[sz]\w+[^.]{0,50}(statement|list|accounting|breakdown)",
+    ), category="Deposits"),
+
+    Rule("waive_tenant_organizing", "Restricts joining a tenant organization", HIGH, (
+        r"(shall not|may not|prohibited from)[^.]{0,90}(tenant (union|association|organization)|organiz\w+ (with )?other (tenants|residents))",
+    ), category="Tenant rights"),
+
+    Rule("rent_escalation_midterm", "Rent can rise during the term", MEDIUM, (
+        r"rent[^.]{0,110}(may be |shall be |subject to )?(increas\w+|adjust\w+|escalat\w+)[^.]{0,80}(during the (initial )?term|upon \d+ days|with \d+ days|annually)",
+    ), category="Rent"),
+
+    Rule("consent_sole_discretion", "Approvals left to sole and absolute discretion", MEDIUM, (
+        r"(sole|absolute|unfettered)\s+(and absolute\s+)?discretion",
+    ), category="Unilateral terms"),
+
+    Rule("notice_by_posting", "Legal notices may be served by posting on your door", MEDIUM, (
+        r"notice[^.]{0,100}(post\w+|affix\w+|tap\w+|attach\w+)[^.]{0,60}(door|premises|entrance)",
+    ), category="Notice"),
+
+    Rule("abandonment_disposal", "Your belongings can be disposed of if deemed abandoned", MEDIUM, (
+        r"abandon\w*[^.]{0,140}(dispose|discard|destroy|sell|remove)",
+    ), category="Move-out"),
+
+    Rule("renovation_no_abatement", "Renovation disruption with no rent reduction", MEDIUM, (
+        r"(renovat\w+|construct\w+|alterat\w+|repair\w+)[^.]{0,140}(no|without)[^.]{0,40}(rent )?(abatement|reduction|offset|credit)",
+    ), category="Maintenance"),
+
+    Rule("mandatory_epay_fee", "Electronic payment required, with a fee", LOW, (
+        r"(electronic|online|portal|ach)[^.]{0,70}payment[^.]{0,80}(fee|convenience charge|service charge)",
+    ), category="Fees"),
+
+    Rule("deposit_commingled", "Deposit need not be held separately", LOW, (
+        r"deposit[^.]{0,100}(commingl\w+|need not be (held|kept)[^.]{0,40}(separate|trust|escrow))",
+    ), category="Deposits"),
+
+    Rule("occupancy_strict", "Strict limit on who may live there", LOW, (
+        r"occupan\w+[^.]{0,80}(shall not exceed|limited to|no more than)[^.]{0,30}(\w+|\d+)\s*(person|occupant|adult)",
+    ), category="Occupancy"),
+
+    # ---- Additional NDA / employment provisions --------------------------------
+    Rule("training_repayment", "Must repay training costs if you leave", HIGH, (
+        r"(training|education|certification|tuition|licens\w+)[^.]{0,130}(repay|reimburse|refund)[^.]{0,80}(if|upon|should)[^.]{0,50}(depart|resign|terminat|leave|separat)",
+    ), category="Compensation"),
+
+    Rule("non_disparagement", "Cannot speak negatively, even truthfully", MEDIUM, (
+        r"non-?disparag\w+", r"shall not[^.]{0,50}disparage",
+    ), category="Speech"),
+
+    Rule("notify_new_employer", "Must tell future employers about these restrictions", MEDIUM, (
+        r"(notify|inform|advise|disclose to)[^.]{0,100}(new|prospective|subsequent|future) employer",
+    ), category="Non-compete"),
+
+    Rule("moral_rights_waiver", "Waives moral rights in your work", MEDIUM, (
+        r"moral rights",
+    ), category="Intellectual property"),
+
+    Rule("exclusive_distant_forum", "Disputes must be heard in a chosen court", MEDIUM, (
+        r"exclusive\w*\s+(venue|jurisdiction|forum)",
+        r"submit\w*[^.]{0,60}exclusive jurisdiction",
+        r"irrevocably (consent|submit)[^.]{0,60}jurisdiction",
+    ), category="Dispute resolution"),
+
+    Rule("inevitable_disclosure", "Relies on the inevitable-disclosure theory", MEDIUM, (
+        r"inevitab\w+[^.]{0,40}disclos\w+",
     ), category="Confidentiality"),
 ]
 
@@ -386,7 +470,344 @@ Rule("mutual_obligations", "Obligations are mutual, not one-sided", 3, (
     Rule("standard_carveouts", "Standard carve-outs for public or independent info", 3, (
         r"(publicly available|public domain|independently developed|already known|rightfully (received|obtained))",
     ), category="Confidentiality"),
+Rule("whistleblower_carveout", "Protects your right to report to regulators", 4, (
+        r"(nothing in this|nothing herein)[^.]{0,140}(prohibit|prevent|restrict|limit)[^.]{0,110}(report|disclos|communicat)\w*[^.]{0,90}(government|agency|law enforcement|securities and exchange|commission|eeoc|nlrb|regulator)",
+        r"defend trade secrets act", r"18 u\.?\s?s\.?\s?c\.?[^.]{0,20}1833",
+    ), category="Tenant rights"),
+
+    Rule("cure_period", "You get a chance to fix a problem before penalty", 4, (
+        r"(right to cure|opportunity to cure|cure (the |such )?(default|breach|violation))",
+        r"(cure|remedy)[^.]{0,60}within[^.]{0,30}\d+\s*(\(\d+\)\s*)?days?",
+    ), category="Default"),
+
+    Rule("rent_fixed_for_term", "Rent is fixed for the whole term", 3, (
+        r"rent[^.]{0,110}(shall not (be )?(increase|change|be raised)|remain\w*\s+(fixed|unchanged|the same))[^.]{0,50}(during|for)[^.]{0,40}term",
+    ), category="Rent"),
+
+    Rule("liability_capped", "Liability is capped", 3, (
+        r"(liability|damages)[^.]{0,110}(shall not exceed|is limited to|are limited to|capped at)",
+    ), category="Liability"),
+
+    Rule("mutual_termination_right", "Either side can end the agreement", 3, (
+        r"either party may terminate",
+    ), category="Termination"),
+
+    Rule("prior_inventions_excluded", "Your existing work is carved out", 3, (
+        r"(prior|pre-?existing|previously conceived)[^.]{0,60}(invention|work|intellectual property)[^.]{0,90}(exclud\w+|not (be )?assign\w+|listed|schedule)",
+    ), category="Intellectual property"),
 ]
+
+
+# ── Confidence / coverage ───────────────────────────────────────────────────────
+# A score is only meaningful if the text was actually readable. Without this, a
+# garbled or failed extraction matches no rules and scores as "Low risk", which is
+# the most dangerous possible failure: telling someone an unreadable document is
+# safe. Instead we check that the document's own core topics are present.
+
+DOC_FAMILY: Dict[str, str] = {
+    "Residential Lease": "lease",
+    "Commercial Lease": "lease",
+    "NDA": "nda",
+    "Employment Contract": "employment",
+    "Service Agreement": "generic",
+    "Purchase Agreement": "generic",
+    "Legal Document": "generic",
+}
+
+TOPIC_PROBES: Dict[str, List[Tuple[str, str]]] = {
+    "lease": [
+        ("parties",  r"\b(landlord|lessor|tenant|lessee|resident)\b"),
+        ("rent",     r"\brent\b|\bmonthly (payment|installment)"),
+        ("term",     r"\bterm\b|\bcommenc\w+|\blease (start|begin|end)|\bexpir\w+"),
+        ("premises", r"\bpremises\b|\bapartment\b|\bdwelling\b|\bunit\b|\bproperty\b"),
+        ("money",    r"\bdeposit\b|\bfee\b|\$\s*\d"),
+    ],
+    "nda": [
+        ("parties",      r"\b(discloser|recipient|receiving party|disclosing party|parties)\b"),
+        ("confidential", r"\bconfidential\w*\b|\bproprietary\b|\btrade secret"),
+        ("obligation",   r"\bshall\b|\bagrees?\b|\bmust\b"),
+        ("term",         r"\bterm\b|\bperiod\b|\bexpir\w+|\byears?\b"),
+    ],
+    "employment": [
+        ("parties",      r"\b(employer|employee|company)\b"),
+        ("role",         r"\bposition\b|\btitle\b|\bduties\b|\bemploym\w+"),
+        ("compensation", r"\bsalary\b|\bwage\b|\bcompensation\b|\bpay\b"),
+        ("term",         r"\bstart date\b|\bat-?will\b|\bterm\b|\bterminat\w+"),
+    ],
+    "generic": [
+        ("parties",    r"\bpart(y|ies)\b|\bbetween\b"),
+        ("obligation", r"\bshall\b|\bagrees?\b|\bmust\b"),
+        ("term",       r"\bterm\b|\bdate\b|\beffective\b"),
+        ("exchange",   r"\bpayment\b|\bfee\b|\bcompensation\b|\bconsideration\b"),
+    ],
+}
+
+# Confidence must depend only on signals that are invariant to repetition,
+# otherwise duplicated text changes the score. Raw word count is NOT invariant,
+# so unique vocabulary is used instead, alongside topic coverage. Brevity alone
+# is not a failed extraction: a short, fair NDA is still fully assessable.
+MIN_UNIQUE_WORDS = 20
+CAP_LOW_CONFIDENCE = 50    # cannot look safe when we could not read it
+CAP_MEDIUM_CONFIDENCE = 85 # cannot claim the top band on thin coverage
+
+
+def _family(doc_type: Optional[str]) -> str:
+    return DOC_FAMILY.get(doc_type or "", "generic")
+
+
+def assess_confidence(text: str, doc_type: Optional[str]) -> Tuple[str, str, int, int]:
+    """
+    How much to trust a score for this text.
+    Returns (level, human reason, topics_found, topics_expected).
+    """
+    norm = normalize(text)
+    unique_words = len({w.lower() for w in re.findall(r"[a-zA-Z]{2,}", norm)})
+    probes = TOPIC_PROBES[_family(doc_type)]
+    found = sum(1 for _name, pat in probes if re.search(pat, norm, re.I))
+    total = len(probes)
+
+    if unique_words < MIN_UNIQUE_WORDS or found <= 1:
+        return (
+            "low",
+            "The text extracted from this document was too sparse to assess. "
+            "It may be a scanned image or a PDF that did not read correctly.",
+            found, total,
+        )
+    if found < (total + 1) // 2:
+        return (
+            "medium",
+            f"Only {found} of the {total} sections normally found in this kind of "
+            "document were detected, so the score may be incomplete.",
+            found, total,
+        )
+    return ("high", "", found, total)
+
+
+# ── Missing protections ─────────────────────────────────────────────────────────
+# A reviewer notices what a document leaves out, not only what it says. These fire
+# when an expected protection is absent. `requires` keeps them relevant: there is
+# no missing deposit deadline if the document never mentions a deposit. They are
+# only evaluated at high confidence, since otherwise "absent" just means unread.
+
+@dataclass(frozen=True)
+class AbsenceRule:
+    id: str
+    label: str
+    weight: int
+    families: Tuple[str, ...]
+    protections: Tuple[str, ...]           # if none match, protection is missing
+    requires: Tuple[str, ...] = ()         # only relevant if one of these matches
+    category: str = ""
+
+    def fires(self, text: str) -> bool:
+        if self.requires and not any(re.search(p, text, re.I) for p in self.requires):
+            return False
+        return not any(re.search(p, text, re.I) for p in self.protections)
+
+
+ABSENCE_RULES: List[AbsenceRule] = [
+    AbsenceRule("missing_entry_notice", "No notice required before the landlord enters", HIGH,
+        ("lease",),
+        protections=(r"(hours?|days?)[^.]{0,70}notice[^.]{0,60}(enter|entry|access)",
+                     r"(enter|entry|access)[^.]{0,80}(hours?|days?)[^.]{0,30}notice",),
+        requires=(r"\benter\b|\bentry\b|\baccess\b",),
+        category="Entry rights"),
+
+    AbsenceRule("missing_deposit_deadline", "No deadline for returning your deposit", MEDIUM,
+        ("lease",),
+        protections=(r"deposit[^.]{0,140}(return|refund|remit)\w*[^.]{0,70}(within|by|no later)",
+                     r"(within|no later than)[^.]{0,40}days?[^.]{0,90}deposit",),
+        requires=(r"security deposit|\bdeposit\b",),
+        category="Deposits"),
+
+    AbsenceRule("missing_landlord_repairs", "Landlord never promises to make repairs", MEDIUM,
+        ("lease",),
+        protections=(r"(landlord|lessor|owner|management)[^.]{0,90}(shall|will|must|agrees to|is responsible)[^.]{0,60}(maintain|repair|habitable|good (repair|condition))",),
+        requires=(r"\brepair\w*|\bmaintenan\w+|\bcondition\b",),
+        category="Maintenance"),
+
+    AbsenceRule("missing_nda_carveouts", "No carve-outs for public or independently known information", HIGH,
+        ("nda",),
+        protections=(r"(publicly available|public domain|independently developed|already known|rightfully (received|obtained)|becomes public)",),
+        requires=(r"confidential\w*",),
+        category="Confidentiality"),
+
+    AbsenceRule("missing_confidentiality_term", "No time limit on confidentiality obligations", MEDIUM,
+        ("nda",),
+        protections=(r"confidential\w*[^.]{0,120}(expire|terminate|end|for a period|years?|months?)",
+                     r"(years?|months?)[^.]{0,90}confidential\w*",),
+        requires=(r"confidential\w*",),
+        category="Confidentiality"),
+
+    AbsenceRule("missing_whistleblower_carveout", "No protection for reporting to regulators", MEDIUM,
+        ("nda", "employment"),
+        protections=(r"(nothing in this|nothing herein)[^.]{0,140}(report|disclos|communicat)",
+                     r"defend trade secrets act", r"(government|agency|law enforcement|regulator|commission)[^.]{0,80}(report|disclos)",),
+        requires=(r"confidential\w*|non-?disclos\w+",),
+        category="Tenant rights"),
+
+    AbsenceRule("missing_prior_invention_carveout", "No carve-out for work you already owned", MEDIUM,
+        ("employment", "nda"),
+        protections=(r"(prior|pre-?existing|previously conceived)[^.]{0,70}(invention|work|intellectual property)",),
+        requires=(r"assign\w*[^.]{0,120}(invention|intellectual property|work product)",),
+        category="Intellectual property"),
+]
+
+
+# ── Compounding combinations ────────────────────────────────────────────────────
+# Individually survivable terms can combine into a trap. A reviewer reads the
+# interaction, not just the list.
+
+@dataclass(frozen=True)
+class ComboRule:
+    id: str
+    label: str
+    weight: int
+    requires: Tuple[str, ...]   # every one of these rule ids must have fired
+    category: str = ""
+
+
+COMBO_RULES: List[ComboRule] = [
+    ComboRule("combo_renewal_trap", "Auto-renewal plus a long notice window is hard to escape",
+              HIGH, ("auto_renew_long_notice", "notice_60_plus"), "Renewal"),
+    ComboRule("combo_roommate_trap", "You owe the full rent but cannot replace a roommate",
+              HIGH, ("joint_several", "no_sublet_absolute"), "Liability"),
+    ComboRule("combo_no_recourse", "Forced arbitration plus paying their legal fees leaves no practical recourse",
+              HIGH, ("mandatory_arbitration", "one_way_attorney_fees"), "Dispute resolution"),
+    ComboRule("combo_locked_in", "Steep exit penalty with no way to sublet",
+              HIGH, ("liquidated_damages", "no_sublet_absolute"), "Early termination"),
+    ComboRule("combo_employment_asymmetry", "They can fire you at will while you stay bound by a non-compete",
+              HIGH, ("noncompete_present", "unilateral_termination_no_notice"), "Non-compete"),
+    ComboRule("combo_nda_overreach", "Perpetual confidentiality combined with broad IP assignment",
+              HIGH, ("perpetual_obligations", "ip_assignment_broad"), "Confidentiality"),
+    ComboRule("combo_deposit_squeeze", "Non-refundable fees on top of an oversized deposit",
+              MEDIUM, ("nonrefundable_fees", "deposit_over_two_months"), "Deposits"),
+]
+
+
+# ── Quantitative severity ───────────────────────────────────────────────────────
+# Magnitude matters. A $75 late fee and a $250,000 liquidated-damages clause are
+# not the same risk, and a rule that only checks for the phrase cannot tell them
+# apart.
+
+_MONEY = r"\$\s*([\d,]+(?:\.\d{1,2})?)"
+
+# Plausibility bounds. A figure outside these is almost certainly something else
+# on the page (a purchase price, a phone number, an address) and is ignored
+# rather than allowed to produce a nonsense ratio.
+_BOUNDS = {
+    "rent":     (100, 50_000),
+    "deposit":  (50, 200_000),
+    "late_fee": (5, 2_000),
+}
+
+# Directional and tightly bound: the amount must sit immediately beside its
+# label. An earlier version scanned a +/-90 character window, which let the
+# "$75" in "late fee of $75 applies if rent is unpaid" be read as the rent.
+_AMOUNT_PATTERNS = {
+    "rent": (
+        r"(?:monthly rent|rent)\s*(?:of|is|shall be|will be|:|in the amount of)?\s*" + _MONEY,
+        _MONEY + r"\s*(?:per|/|a)\s*month",
+    ),
+    "deposit": (
+        r"(?:security deposit|deposit)\s*(?:of|is|shall be|equal to|:|in the amount of)?\s*" + _MONEY,
+    ),
+    "late_fee": (
+        r"late\s*(?:fee|charge)\s*(?:of|is|shall be|:)?\s*" + _MONEY,
+        _MONEY + r"\s*late\s*(?:fee|charge)",
+    ),
+}
+
+
+def _amounts(text: str, kind: str) -> List[float]:
+    """Plausible dollar amounts for one labelled quantity."""
+    low, high = _BOUNDS[kind]
+    found: List[float] = []
+    for pattern in _AMOUNT_PATTERNS[kind]:
+        for raw in re.findall(pattern, text, re.I):
+            value = raw if isinstance(raw, str) else raw[0]
+            try:
+                amount = float(value.replace(",", ""))
+            except ValueError:
+                continue
+            if low <= amount <= high:
+                found.append(amount)
+    return found
+
+
+def _penalty_amounts(text: str) -> List[float]:
+    """Fixed penalty sums, which must be stated near penalty language."""
+    found: List[float] = []
+    for pattern in (
+        r"liquidated damages[^.]{0,60}?" + _MONEY,
+        _MONEY + r"[^.]{0,40}?(?:liquidated damages|per occurrence)",
+        r"penalty[^.]{0,40}?" + _MONEY,
+    ):
+        for raw in re.findall(pattern, text, re.I):
+            value = raw if isinstance(raw, str) else raw[0]
+            try:
+                amount = float(value.replace(",", ""))
+            except ValueError:
+                continue
+            if 100 <= amount <= 100_000_000:
+                found.append(amount)
+    return found
+
+
+def numeric_findings(text: str, already: set) -> List[Tuple[str, str, int, str]]:
+    """
+    Graded findings derived from actual amounts. Magnitude matters: a $75 late fee
+    and a $250,000 liquidated-damages clause are not the same risk, and a rule
+    that only checks for the phrase cannot tell them apart.
+
+    `already` holds the rule ids that fired, so a numeric check does not
+    double-count what a phrase rule caught.
+    """
+    norm = normalize(text)
+    out: List[Tuple[str, str, int, str]] = []
+
+    rents = _amounts(norm, "rent")
+    rent = max(rents) if rents else None
+
+    # A deposit far above one month's rent ties up a lot of cash.
+    deposits = _amounts(norm, "deposit")
+    if rent and deposits and "deposit_over_two_months" not in already:
+        ratio = max(deposits) / rent
+        if ratio >= 2.5:
+            out.append(("deposit_ratio_high", f"Deposit is about {ratio:.1f}x the monthly rent", HIGH, "Deposits"))
+        elif ratio >= 1.6:
+            out.append(("deposit_ratio_elevated", f"Deposit is about {ratio:.1f}x the monthly rent", MEDIUM, "Deposits"))
+
+    # Late fees above roughly 5% of rent are challenged as punitive in many states.
+    late = _amounts(norm, "late_fee")
+    if rent and late:
+        pct = max(late) / rent * 100
+        if pct >= 10:
+            out.append(("late_fee_steep", f"Late fee is about {pct:.0f}% of the monthly rent", MEDIUM, "Late fees"))
+        elif pct >= 5:
+            out.append(("late_fee_notable", f"Late fee is about {pct:.0f}% of the monthly rent", LOW, "Late fees"))
+
+    # A large fixed penalty is a different order of risk from a nominal one.
+    penalties = _penalty_amounts(norm)
+    if penalties:
+        biggest = max(penalties)
+        if biggest >= 50_000:
+            out.append(("penalty_very_large", f"Fixed penalty of ${biggest:,.0f}", CRITICAL, "Remedies"))
+        elif biggest >= 10_000:
+            out.append(("penalty_large", f"Fixed penalty of ${biggest:,.0f}", HIGH, "Remedies"))
+
+    # Non-compete length drives both enforceability and real-world harm.
+    match = re.search(r"non-?compet\w+[^.]{0,200}?(\d{1,2})\s*(month|year)", norm, re.I) or \
+            re.search(r"(\d{1,2})\s*(month|year)s?[^.]{0,200}?non-?compet\w+", norm, re.I)
+    if match:
+        n = int(match.group(1))
+        months = n * 12 if match.group(2).lower().startswith("year") else n
+        if months >= 24:
+            out.append(("noncompete_very_long", f"Non-compete runs {months} months", CRITICAL, "Non-compete"))
+        elif months >= 12:
+            out.append(("noncompete_long", f"Non-compete runs {months} months", HIGH, "Non-compete"))
+    return out
+
 
 
 GRADE_BANDS = [
@@ -413,6 +834,8 @@ class ScoreResult:
     grade: str
     penalty: int
     credits: int
+    confidence: str = "high"       # high | medium | low
+    confidence_note: str = ""      # shown to the reader when not high
     risks: List[DetectedRule] = field(default_factory=list)
     benefits: List[DetectedRule] = field(default_factory=list)
 
@@ -468,33 +891,78 @@ def match_rules(text: str) -> Tuple[List[Rule], List[Rule]]:
     return risks, credits
 
 
-def score_document(full_text: str) -> ScoreResult:
+def _grade_for(score: int) -> str:
+    return next(label for cutoff, label in GRADE_BANDS if score >= cutoff)
+
+
+def score_document(full_text: str, doc_type: Optional[str] = None) -> ScoreResult:
     """
     Compute the deterministic safety score for a whole document.
 
-    Scans the entire text (not just the clauses sent to the LLM), so risks buried
-    in later sections still count. Rules are deduped, so repetition cannot move
-    the score.
-    """
-    risks, credits = match_rules(full_text)
+    Combines four signals, all derived only from the text:
+      1. provisions present      (RISK_RULES / CREDIT_RULES)
+      2. protections absent      (ABSENCE_RULES, only when confidence is high)
+      3. magnitude of amounts    (numeric_findings)
+      4. compounding combinations (COMBO_RULES)
 
-    penalty = sum(r.weight for r in risks)
-    raw_credits = sum(r.weight for r in credits)
-    credits_applied = min(raw_credits, MAX_CREDITS)
+    Scans the entire text, not just the clauses sent to the LLM, so risks buried
+    in later sections still count. Findings are deduped by id, so a provision
+    repeated in several clauses cannot move the score.
+    """
+    confidence, note, _found, _total = assess_confidence(full_text, doc_type)
+    norm = normalize(full_text)
+
+    risk_rules, credit_rules = match_rules(full_text)
+    fired = {r.id for r in risk_rules}
+
+    # (id, label, weight, category)
+    findings: List[Tuple[str, str, int, str]] = [
+        (r.id, r.label, r.weight, r.category) for r in risk_rules
+    ]
+
+    # Missing protections only count when we are confident we read the document.
+    # Otherwise "absent" would really mean "not extracted".
+    if confidence == "high":
+        family = _family(doc_type)
+        for rule in ABSENCE_RULES:
+            if family in rule.families and rule.fires(norm):
+                findings.append((rule.id, rule.label, rule.weight, rule.category))
+                fired.add(rule.id)
+
+    for nid, nlabel, nweight, ncat in numeric_findings(full_text, fired):
+        findings.append((nid, nlabel, nweight, ncat))
+        fired.add(nid)
+
+    for combo in COMBO_RULES:
+        if all(req in fired for req in combo.requires):
+            findings.append((combo.id, combo.label, combo.weight, combo.category))
+
+    penalty = sum(weight for _i, _l, weight, _c in findings)
+    credits_applied = min(sum(r.weight for r in credit_rules), MAX_CREDITS)
 
     effective = max(0, penalty - credits_applied)
     base = 100.0 * K / (effective + K)
-
-    ceiling = _ceiling([r.weight for r in risks])
+    ceiling = _ceiling([weight for _i, _l, weight, _c in findings])
 
     score = int(round(min(base, ceiling, MAX_SCORE)))
     score = max(1, min(100, score))
 
-    grade = next(label for cutoff, label in GRADE_BANDS if score >= cutoff)
+    # A score cannot claim safety we did not actually verify.
+    if confidence == "low":
+        score = min(score, CAP_LOW_CONFIDENCE)
+        grade = "Not enough detail to score"
+    else:
+        if confidence == "medium":
+            score = min(score, CAP_MEDIUM_CONFIDENCE)
+        grade = _grade_for(score)
 
-    to_detected = lambda rs: [
-        DetectedRule(r.id, r.label, r.weight, r.category, _severity_name(r.weight))
-        for r in sorted(rs, key=lambda x: -x.weight)
+    risks = [
+        DetectedRule(i, label, weight, cat, _severity_name(weight))
+        for i, label, weight, cat in sorted(findings, key=lambda f: -f[2])
+    ]
+    benefits = [
+        DetectedRule(r.id, r.label, r.weight, r.category, "favorable")
+        for r in sorted(credit_rules, key=lambda r: -r.weight)
     ]
 
     return ScoreResult(
@@ -502,8 +970,10 @@ def score_document(full_text: str) -> ScoreResult:
         grade=grade,
         penalty=penalty,
         credits=credits_applied,
-        risks=to_detected(risks),
-        benefits=to_detected(credits),
+        confidence=confidence,
+        confidence_note=note,
+        risks=risks,
+        benefits=benefits,
     )
 
 

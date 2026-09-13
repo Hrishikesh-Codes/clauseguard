@@ -34,6 +34,8 @@ export interface SafetyScore {
   // From the deterministic scoring engine. Optional so older cached
   // history entries still render.
   grade?: string
+  confidence?: 'high' | 'medium' | 'low'
+  confidence_note?: string
   risks?: DetectedItem[]
   benefits?: DetectedItem[]
 }

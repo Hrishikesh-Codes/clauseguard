@@ -38,6 +38,10 @@ class SafetyScore(BaseModel):
     favorable_count: int
     # Added by the deterministic scoring engine. Optional for backward compatibility.
     grade: str = ""
+    # How much the text supported a score: high | medium | low. When not high the
+    # reader is told, rather than being shown a confident-looking number.
+    confidence: str = "high"
+    confidence_note: str = ""
     risks: List[DetectedItem] = []
     benefits: List[DetectedItem] = []
 

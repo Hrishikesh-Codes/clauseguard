@@ -314,15 +314,18 @@ def build_clauses(
     return result
 
 
-def compute_safety(clauses: List[Clause], full_text: str) -> SafetyScore:
+def compute_safety(clauses: List[Clause], full_text: str, doc_type: str = "") -> SafetyScore:
     """
     Document score from the deterministic engine over the FULL text, so risks in
-    sections that were never sent to the LLM still count.
+    sections that were never sent to the LLM still count. doc_type selects which
+    topic probes and missing-protection rules apply.
     """
-    result = scoring.score_document(full_text)
+    result = scoring.score_document(full_text, doc_type)
     return SafetyScore(
         score=result.score,
         grade=result.grade,
+        confidence=result.confidence,
+        confidence_note=result.confidence_note,
         high_count=sum(1 for c in clauses if c.risk_level == "high"),
         medium_count=sum(1 for c in clauses if c.risk_level == "medium"),
         standard_count=sum(1 for c in clauses if c.risk_level == "standard"),
@@ -536,7 +539,7 @@ def analyze_document(
 
     return (
         analyzed,
-        compute_safety(analyzed, full_text),
+        compute_safety(analyzed, full_text, doc_type),
         extract_summary(full_text, doc_type),
         len(selected),
     )
