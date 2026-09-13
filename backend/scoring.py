@@ -112,11 +112,13 @@ RISK_RULES: List[Rule] = [
         r"waiv\w*[^.]{0,60}class action",
     ), category="Dispute resolution"),
 
-    Rule("one_way_attorney_fees", "Tenant pays landlord's attorney fees", HIGH, (
+    Rule("one_way_attorney_fees", "You pay the other side's attorney fees", HIGH, (
         r"tenant[^.]{0,140}(landlord'?s?|lessor'?s?|owner'?s?)[^.]{0,50}attorney'?s?,?\s*(fees|costs)",
-        r"attorney'?s?,?\s*fees[^.]{0,90}incurred by[^.]{0,40}(landlord|lessor|owner)",
+        r"attorney'?s?,?\s*fees[^.]{0,90}incurred by[^.]{0,40}(landlord|lessor|owner|discloser|employer|company)",
+        # Generic: the weaker party pays the stronger party's fees.
+        r"(shall|must|agrees? to|will)\s+(pay|reimburse)[^.]{0,90}(landlord|lessor|owner|discloser|employer|company|seller|licensor)'?s?[^.]{0,60}attorney",
     ), exclude=(
-        r"prevailing party", r"either party[^.]{0,60}attorney",
+        r"prevailing party", r"either party[^.]{0,60}attorney", r"each party[^.]{0,60}(own|its own)[^.]{0,30}attorney",
     ), category="Legal costs"),
 
     Rule("broad_indemnity", "Broad indemnification / hold harmless", HIGH, (
@@ -420,6 +422,22 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text or "")
 
 
+def _dehyphenate(text: str) -> str:
+    """Rejoin words broken by a hyphen at a line break, common in real PDFs."""
+    return re.sub(r"(\w)-[ \t]*\r?\n[ \t]*(\w)", r"\1\2", text or "")
+
+
+def _variants(text: str) -> Tuple[str, ...]:
+    """
+    Both normalizations of the text. Rejoining hyphenated line breaks recovers
+    words like "indemnifi-\ncation", but blindly joining could break a genuine
+    compound such as "month-to-month", so both forms are matched and unioned.
+    """
+    plain = normalize(text)
+    joined = normalize(_dehyphenate(text))
+    return (plain,) if plain == joined else (plain, joined)
+
+
 def _ceiling(weights: List[int]) -> int:
     """Highest score a document with these findings is allowed to reach."""
     if any(w >= CRITICAL for w in weights):
@@ -444,9 +462,9 @@ def _severity_name(weight: int) -> str:
 
 def match_rules(text: str) -> Tuple[List[Rule], List[Rule]]:
     """Return (matched risk rules, matched credit rules) for a block of text."""
-    norm = normalize(text)
-    risks = [r for r in RISK_RULES if r.matches(norm)]
-    credits = [r for r in CREDIT_RULES if r.matches(norm)]
+    forms = _variants(text)
+    risks = [r for r in RISK_RULES if any(r.matches(f) for f in forms)]
+    credits = [r for r in CREDIT_RULES if any(r.matches(f) for f in forms)]
     return risks, credits
 
 
