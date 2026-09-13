@@ -42,8 +42,15 @@ K = 70
 # Credits cannot fully erase real risk.
 MAX_CREDITS = 12
 
-# A lease containing any rule at this severity cannot score above the given ceiling.
-SEVERITY_CEILINGS = [(CRITICAL, 45), (HIGH, 72)]
+# Severity ceilings. A document with serious red flags cannot score in the safe
+# band no matter how many favorable terms it also contains. The count-based tier
+# matters because short documents (NDAs, offer letters) accumulate far less raw
+# penalty than a 30-page lease, yet several compounding HIGH provisions are just
+# as damaging.
+CEILING_CRITICAL = 45     # any critical provision
+CEILING_MANY_HIGH = 55    # three or more high-severity provisions
+CEILING_HIGH = 72         # at least one high-severity provision
+MANY_HIGH_THRESHOLD = 3
 
 # Even a clean lease is not certified "perfect" - keeps the top of the scale honest.
 MAX_SCORE = 97
@@ -241,6 +248,80 @@ RISK_RULES: List[Rule] = [
     Rule("lock_key_fees", "Lockout or key replacement fees", LOW, (
         r"(lock\s?out|key|fob)[^.]{0,60}(fee|charge|\$\s*\d+)",
     ), category="Fees"),
+# ---- General contract, NDA and employment provisions ----------------------
+    # Keyed on language that does not appear in residential leases, so these are
+    # safe to evaluate against every document type.
+
+    Rule("noncompete_unlimited_geography", "Non-compete with no geographic limit", CRITICAL, (
+        r"(non-?compet\w+|not (engage|compete)|shall not[^.]{0,40}competitive)[^.]{0,200}(anywhere in the (united states|world|country)|without (any )?geographic (limit|restriction|scope)|in any (state|country|territory))",
+        r"(anywhere in the (united states|world)|without (any )?geographic (limit|restriction))[^.]{0,200}(non-?compet\w+|competitive)",
+    ), category="Non-compete"),
+
+    Rule("invention_assignment_offhours", "Claims inventions made on your own time", CRITICAL, (
+        r"(invention|idea|improvement|work product|discover\w+)[^.]{0,160}whether or not[^.]{0,80}(on|using|during)[^.]{0,60}(employer|company|its)[^.]{0,30}(time|resources|equipment|premises)",
+        r"whether or not[^.]{0,60}(developed|conceived|made)[^.]{0,60}(on|using)[^.]{0,50}(employer|company)[^.]{0,30}(time|resources|equipment)",
+    ), category="Intellectual property"),
+
+    Rule("perpetual_obligations", "Obligations never expire (perpetual)", HIGH, (
+        r"(in perpetuity|perpetual\w*)",
+        r"(confidential\w*|obligation\w*)[^.]{0,90}(shall (not|never) (expire|terminate)|no expiration|survive[^.]{0,30}indefinitel)",
+    ), category="Term"),
+
+    Rule("noncompete_present", "Non-compete restricts future work", HIGH, (
+        r"non-?compet\w+",
+        r"shall not[^.]{0,80}(engage in|be employed by|work for)[^.]{0,80}(business )?competitive",
+    ), category="Non-compete"),
+
+    Rule("ip_assignment_broad", "Broad assignment of your intellectual property", HIGH, (
+        r"(assign\w*|hereby assigns?)[^.]{0,120}(invention|idea|improvement|work product|intellectual property|copyright|patent)",
+        r"(invention|idea|improvement|work product)[^.]{0,90}(is|are|shall be)[^.]{0,40}(assigned|the (sole )?property) ",
+    ), exclude=(
+        r"(sublet|subleas\w+|assign\w*)[^.]{0,60}(the )?(lease|premises)",
+    ), category="Intellectual property"),
+
+    Rule("no_overtime_exempt", "No overtime regardless of hours worked", HIGH, (
+        r"(exempt|no overtime|without overtime)[^.]{0,120}(regardless of[^.]{0,30}hours|no overtime|not[^.]{0,30}entitled[^.]{0,30}overtime)",
+        r"no overtime[^.]{0,80}regardless",
+    ), category="Compensation"),
+
+    Rule("wage_deduction_unilateral", "Employer may deduct from your wages at will", HIGH, (
+        r"(deduct|withhold|offset)\w*[^.]{0,90}(from )?(final |your )?(wages|paycheck|salary|compensation)",
+    ), category="Compensation"),
+
+    Rule("nonsolicit_long", "Long non-solicitation restriction", HIGH, (
+        r"(non-?solicit\w*|shall not solicit)[^.]{0,160}\b(two|three|four|five|2|3|4|5)\b\s*(\(\d+\)\s*)?years?",
+        r"\b(two|three|four|five|2|3|4|5)\b\s*(\(\d+\)\s*)?years?[^.]{0,120}(non-?solicit\w*|not solicit)",
+    ), category="Non-solicitation"),
+
+    Rule("unlimited_liability", "Unlimited or uncapped liability", HIGH, (
+        r"(unlimited|without limitation|no limit)[^.]{0,60}liab\w+",
+        r"liab\w+[^.]{0,60}(shall not be (limited|capped)|without limitation)",
+    ), category="Liability"),
+
+    Rule("bonus_clawback", "Signing or relocation bonus must be repaid", MEDIUM, (
+        r"(clawback|claw back)",
+        r"(repaid?|repay|reimburse|return)[^.]{0,110}(signing |relocation |retention )?bonus",
+        r"bonus[^.]{0,90}(must be|shall be)[^.]{0,40}(repaid|returned|reimbursed)",
+    ), category="Compensation"),
+
+    Rule("overbroad_confidentiality", "Confidential info defined too broadly", MEDIUM, (
+        r"whether or not[^.]{0,60}(marked|designated|identified|labeled)",
+        r"(disclosed )?(orally or in writing|in any form)[^.]{0,80}whether or not",
+    ), category="Confidentiality"),
+
+    Rule("injunctive_without_bond", "Injunction without bond or proof of damages", MEDIUM, (
+        r"injunctive relief[^.]{0,110}without[^.]{0,60}(bond|proving|showing|posting)",
+        r"without[^.]{0,40}(posting )?bond[^.]{0,80}injunctive",
+    ), category="Remedies"),
+
+    Rule("unilateral_termination_no_notice", "Other side may terminate without cause or notice", MEDIUM, (
+        r"(may (be )?terminat\w+|reserves the right to terminate)[^.]{0,90}(at any time|without cause)[^.]{0,60}without[^.]{0,30}notice",
+        r"at-?will[^.]{0,90}without (cause or notice|notice)",
+    ), category="Termination"),
+
+    Rule("short_return_window", "Very short deadline to return or destroy materials", LOW, (
+        r"(within|no later than)[^.]{0,30}(twenty-?four|forty-?eight|24|48)\s*(\(\d+\)\s*)?hours?[^.]{0,90}(return|destro\w+|certif\w+)",
+    ), category="Confidentiality"),
 ]
 
 
@@ -290,6 +371,19 @@ CREDIT_RULES: List[Rule] = [
         r"(one|1)\s*(\(\d\)\s*)?month'?s?\s*rent[^.]{0,80}(early )?terminat\w+",
         r"(thirty|30)\s*(\(\d+\)\s*)?days?[^.]{0,60}notice[^.]{0,60}terminat\w+",
     ), category="Early termination"),
+Rule("mutual_obligations", "Obligations are mutual, not one-sided", 3, (
+        r"mutual (non-?disclosure|confidentiality|agreement)",
+        r"each party[^.]{0,80}(shall|agrees to)[^.]{0,60}(hold|protect|maintain)",
+    ), category="Fairness"),
+
+    Rule("confidentiality_time_limited", "Confidentiality obligations expire", 3, (
+        r"(confidential\w*)[^.]{0,110}(expire|terminate|end)[^.]{0,60}\b(one|two|three|five|1|2|3|5)\b\s*(\(\d+\)\s*)?years?",
+        r"\b(one|two|three|five|1|2|3|5)\b\s*(\(\d+\)\s*)?years?[^.]{0,80}(confidential\w*)[^.]{0,50}(expire|terminate|end)",
+    ), category="Confidentiality"),
+
+    Rule("standard_carveouts", "Standard carve-outs for public or independent info", 3, (
+        r"(publicly available|public domain|independently developed|already known|rightfully (received|obtained))",
+    ), category="Confidentiality"),
 ]
 
 
@@ -324,6 +418,18 @@ class ScoreResult:
 def normalize(text: str) -> str:
     """Collapse whitespace so provisions split across PDF line breaks still match."""
     return re.sub(r"\s+", " ", text or "")
+
+
+def _ceiling(weights: List[int]) -> int:
+    """Highest score a document with these findings is allowed to reach."""
+    if any(w >= CRITICAL for w in weights):
+        return CEILING_CRITICAL
+    highs = sum(1 for w in weights if w >= HIGH)
+    if highs >= MANY_HIGH_THRESHOLD:
+        return CEILING_MANY_HIGH
+    if highs >= 1:
+        return CEILING_HIGH
+    return 100
 
 
 def _severity_name(weight: int) -> str:
@@ -361,13 +467,7 @@ def score_document(full_text: str) -> ScoreResult:
     effective = max(0, penalty - credits_applied)
     base = 100.0 * K / (effective + K)
 
-    # A critical or high red flag caps the achievable score regardless of credits.
-    ceiling = 100
-    worst = max((r.weight for r in risks), default=0)
-    for threshold, cap in SEVERITY_CEILINGS:
-        if worst >= threshold:
-            ceiling = cap
-            break
+    ceiling = _ceiling([r.weight for r in risks])
 
     score = int(round(min(base, ceiling, MAX_SCORE)))
     score = max(1, min(100, score))
