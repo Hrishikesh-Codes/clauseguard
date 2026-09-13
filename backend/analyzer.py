@@ -186,30 +186,45 @@ def call_groq(
     return _parse_json(response.choices[0].message.content)
 
 
-def _fallback_prose(clause: str, level: str, flags: List[str]) -> Dict[str, str]:
+def _fallback_prose(
+    clause: str, level: str, flags: List[str], credits: Optional[List[str]] = None
+) -> Dict[str, str]:
     """Used when the LLM is unavailable so results stay useful instead of failing."""
+    credits = credits or []
+    snippet = clause[:220].strip()
+
     if flags:
         issues = "; ".join(flags)
-        plain = (
-            f"This clause was flagged for: {issues}. "
-            f"The text reads: {clause[:220].strip()}"
-        )
-        verdict = (
-            f"This is rated {level} risk because of: {issues}. "
-            "Ask the landlord to strike or soften these terms before you sign."
-        )
-        title = flags[0]
-    else:
-        plain = clause[:260].strip()
-        verdict = f"This is rated {level} risk. No specific red-flag provisions were detected."
-        title = "Standard provision"
-    return {"title": title, "plain_english": plain, "verdict": verdict}
+        return {
+            "title": flags[0],
+            "plain_english": f"This clause was flagged for: {issues}. The text reads: {snippet}",
+            "verdict": (
+                f"This is rated {level} risk because of: {issues}. "
+                "Ask the landlord to strike or soften these terms before you sign."
+            ),
+        }
+    if credits:
+        wins = "; ".join(credits)
+        return {
+            "title": credits[0],
+            "plain_english": f"This clause works in your favor: {wins}. The text reads: {snippet}",
+            "verdict": (
+                f"This is favorable because it gives you: {wins}. "
+                "Keep this term in the lease and make sure it is not edited out."
+            ),
+        }
+    return {
+        "title": "Standard provision",
+        "plain_english": clause[:260].strip(),
+        "verdict": "This is a standard provision. No specific red-flag provisions were detected.",
+    }
 
 
 def build_clauses(
     selected: List[str],
     classifications: List[Tuple[str, int, List[str]]],
     llm_data: Optional[Dict[str, Any]],
+    meta: Optional[List[Tuple[str, List[str]]]] = None,
 ) -> List[Clause]:
     """
     Build Clause objects. Risk level and score always come from the rule engine;
@@ -233,7 +248,10 @@ def build_clauses(
         zip(selected, classifications)
     ):
         item = items_by_index.get(i, {})
-        fb = _fallback_prose(clause_text, level, flags)
+        category, credit_labels = (
+            meta[i] if meta and i < len(meta) else ("General", [])
+        )
+        fb = _fallback_prose(clause_text, level, flags, credit_labels)
 
         def pick(key: str, default: str) -> str:
             val = item.get(key)
@@ -243,7 +261,7 @@ def build_clauses(
             Clause(
                 # Stable id derived from position, so repeated runs match up.
                 id=f"clause-{i + 1}",
-                clause_type=pick("clause_type", flags[0] if flags else "General"),
+                clause_type=pick("clause_type", category),
                 title=pick("title", fb["title"]),
                 risk_level=level,       # rule engine is authoritative
                 risk_score=risk_score,  # rule engine is authoritative
@@ -355,11 +373,20 @@ def analyze_document(
 
     # Deterministic classification drives everything downstream.
     classifications: List[Tuple[str, int, List[str]]] = []
+    meta: List[Tuple[str, List[str]]] = []
     for text in selected:
         level, risk_score = scoring.classify_clause(text)
-        risks, _ = scoring.match_rules(text)
-        flags = [r.label for r in sorted(risks, key=lambda r: -r.weight)]
-        classifications.append((level, risk_score, flags))
+        risks, credits = scoring.match_rules(text)
+        ranked = sorted(risks, key=lambda r: -r.weight)
+        ranked_credits = sorted(credits, key=lambda r: -r.weight)
+        classifications.append((level, risk_score, [r.label for r in ranked]))
+        # Category makes a better clause_type than the rule label, which would
+        # otherwise duplicate the title when the LLM omits a clause.
+        source = ranked or ranked_credits
+        meta.append((
+            source[0].category if source and source[0].category else "General",
+            [c.label for c in ranked_credits],
+        ))
 
     # Prose is best-effort: a model outage must not lose the analysis.
     llm_data = None
@@ -368,7 +395,7 @@ def analyze_document(
     except Exception as e:
         print(f"GROQ ERROR ({MODEL_ANALYSIS}): {e}")
 
-    analyzed = build_clauses(selected, classifications, llm_data)
+    analyzed = build_clauses(selected, classifications, llm_data, meta)
     # Show the riskiest clauses first; stable tie-break keeps ordering reproducible.
     analyzed.sort(key=lambda c: (RISK_RANK.get(c.risk_level, 9), -c.risk_score))
 
