@@ -23,12 +23,23 @@ class DocumentMeta(BaseModel):
     analysis_time_ms: int
 
 
+class DetectedItem(BaseModel):
+    """A provision the deterministic rule engine matched."""
+    label: str
+    category: str = ""
+    severity: str = ""  # critical | high | medium | low | favorable
+
+
 class SafetyScore(BaseModel):
     score: int
     high_count: int
     medium_count: int
     standard_count: int
     favorable_count: int
+    # Added by the deterministic scoring engine. Optional for backward compatibility.
+    grade: str = ""
+    risks: List[DetectedItem] = []
+    benefits: List[DetectedItem] = []
 
 
 class LeaseSummary(BaseModel):

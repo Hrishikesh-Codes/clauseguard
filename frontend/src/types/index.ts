@@ -19,12 +19,23 @@ export interface DocumentMeta {
   analysis_time_ms: number
 }
 
+export interface DetectedItem {
+  label: string
+  category: string
+  severity: string // critical | high | medium | low | favorable
+}
+
 export interface SafetyScore {
   score: number
   high_count: number
   medium_count: number
   standard_count: number
   favorable_count: number
+  // From the deterministic scoring engine. Optional so older cached
+  // history entries still render.
+  grade?: string
+  risks?: DetectedItem[]
+  benefits?: DetectedItem[]
 }
 
 export interface LeaseSummary {

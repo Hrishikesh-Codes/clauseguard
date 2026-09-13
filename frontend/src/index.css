@@ -318,6 +318,93 @@ img { display: block; max-width: 100%; }
   color: var(--text-primary);
 }
 
+/* ─── Score sub-label (grade) ─────────────────────────────────────────────── */
+.score-sub {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-top: 4px;
+  opacity: 0.85;
+}
+
+/* ─── Risk breakdown ──────────────────────────────────────────────────────── */
+.breakdown {
+  border-bottom: 0.5px solid var(--border-section);
+  padding: 28px 32px;
+}
+
+.breakdown-header {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.breakdown-note {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+
+.breakdown-group { margin-bottom: 20px; }
+.breakdown-group:last-child { margin-bottom: 0; }
+
+.breakdown-group-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.breakdown-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--border-row);
+  flex-wrap: wrap;
+}
+
+.breakdown-row:last-child { border-bottom: none; }
+
+.breakdown-sev {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 0.5px solid;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  min-width: 86px;
+  text-align: center;
+}
+
+.breakdown-label {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 200px;
+}
+
+.breakdown-cat {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
 /* ─── Lease summary card ──────────────────────────────────────────────────── */
 .summary-card {
   border-bottom: 0.5px solid var(--border-section);
@@ -813,6 +900,9 @@ img { display: block; max-width: 100%; }
 
   .results-hero { padding: 24px 20px 20px; }
   .summary-card { padding: 20px; }
+  .breakdown { padding: 20px; }
+  .breakdown-sev { min-width: 78px; }
+  .breakdown-label { min-width: 140px; font-size: 13px; }
   .summary-grid { grid-template-columns: 1fr; }
   .summary-row { border-right: none; }
   .summary-row:nth-last-child(-n+2) { border-bottom: 0.5px solid var(--border-row); }
