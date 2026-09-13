@@ -7,8 +7,6 @@ export interface Clause {
   excerpt: string
   plain_english: string
   verdict: string
-  action_label: string
-  action_prompt: string
 }
 
 export interface DocumentMeta {
@@ -17,6 +15,8 @@ export interface DocumentMeta {
   word_count: number
   doc_type: string
   analysis_time_ms: number
+  clauses_found?: number
+  clauses_analyzed?: number
 }
 
 export interface DetectedItem {
@@ -38,26 +38,21 @@ export interface SafetyScore {
   benefits?: DetectedItem[]
 }
 
-export interface LeaseSummary {
-  landlord: string | null
-  tenant: string | null
-  property_address: string | null
-  lease_start: string | null
-  lease_end: string | null
-  lease_term: string | null
-  monthly_rent: string | null
-  payment_due_date: string | null
-  security_deposit: string | null
-  late_fee: string | null
-  move_in_notes: string | null
-  move_out_notes: string | null
+export interface SummaryField {
+  label: string
+  value: string
+}
+
+export interface DocumentSummary {
+  doc_type: string
+  fields: SummaryField[]
 }
 
 export interface AnalysisResult {
   meta: DocumentMeta
   safety: SafetyScore
   clauses: Clause[]
-  summary: LeaseSummary | null
+  summary: DocumentSummary | null
   analyzedAt: string // ISO timestamp
 }
 

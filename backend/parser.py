@@ -38,6 +38,8 @@ def extract_text_from_pdf(file_bytes: bytes) -> Tuple[str, int]:
         raise RuntimeError(f"PDF_PARSE_ERROR: {str(e)}")
 
 
+MAX_SEGMENTS = 80
+
 SECTION_HEADER_PATTERNS = [
     r"^\s*(\d+\.)\s+([A-Z][A-Z\s]{3,})\s*$",
     r"^\s*([A-Z][A-Z\s]{5,})\s*$",
@@ -107,8 +109,10 @@ def segment_clauses(text: str) -> List[str]:
     if len(clauses) < 3:
         clauses = split_by_paragraphs(text)
 
-    # Cap to 40 clauses max to keep prompt size manageable
-    return clauses[:40]
+    # Generous cap. The analyzer selects a token-budgeted subset from this pool,
+    # and scoring reads the full text separately, so a larger pool only improves
+    # which clauses get chosen.
+    return clauses[:MAX_SEGMENTS]
 
 
 def split_by_paragraphs(text: str) -> List[str]:
@@ -119,7 +123,7 @@ def split_by_paragraphs(text: str) -> List[str]:
         cleaned = " ".join(p.split())
         if len(cleaned) > 100:
             result.append(cleaned)
-    return result[:40]
+    return result[:MAX_SEGMENTS]
 
 
 def detect_doc_type(text: str) -> str:

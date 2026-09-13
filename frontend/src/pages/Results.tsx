@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAnalysis } from '../context/AnalysisContext'
 import Nav from '../components/Nav'
 import ScoreStrip from '../components/ScoreStrip'
-import LeaseSummaryCard from '../components/LeaseSummaryCard'
+import SummaryCard from '../components/SummaryCard'
 import RiskBreakdown from '../components/RiskBreakdown'
 import FilterTabs from '../components/FilterTabs'
 import ClauseRow from '../components/ClauseRow'
@@ -56,12 +56,20 @@ export default function Results() {
           {meta.doc_type}
           <span className="meta-dot">·</span>
           Analyzed in {formatAnalysisTime(meta.analysis_time_ms)}
+          {!!meta.clauses_found && (
+            <>
+              <span className="meta-dot">·</span>
+              {meta.clauses_analyzed === meta.clauses_found
+                ? `All ${meta.clauses_found} clauses explained`
+                : `${meta.clauses_analyzed} of ${meta.clauses_found} clauses explained`}
+            </>
+          )}
         </p>
       </div>
 
       <ScoreStrip safety={safety} />
       <RiskBreakdown safety={safety} />
-      {current.summary && <LeaseSummaryCard summary={current.summary} />}
+      {current.summary && <SummaryCard summary={current.summary} />}
       <FilterTabs active={activeTab} onChange={setActiveTab} counts={counts} />
 
       <div className="clause-list">

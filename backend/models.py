@@ -11,8 +11,6 @@ class Clause(BaseModel):
     excerpt: str
     plain_english: str
     verdict: str
-    action_label: str
-    action_prompt: str
 
 
 class DocumentMeta(BaseModel):
@@ -21,6 +19,8 @@ class DocumentMeta(BaseModel):
     word_count: int
     doc_type: str
     analysis_time_ms: int
+    clauses_found: int = 0     # total clauses the parser extracted
+    clauses_analyzed: int = 0  # how many fit in the token budget
 
 
 class DetectedItem(BaseModel):
@@ -42,26 +42,26 @@ class SafetyScore(BaseModel):
     benefits: List[DetectedItem] = []
 
 
-class LeaseSummary(BaseModel):
-    landlord: Optional[str] = None
-    tenant: Optional[str] = None
-    property_address: Optional[str] = None
-    lease_start: Optional[str] = None
-    lease_end: Optional[str] = None
-    lease_term: Optional[str] = None
-    monthly_rent: Optional[str] = None
-    payment_due_date: Optional[str] = None
-    security_deposit: Optional[str] = None
-    late_fee: Optional[str] = None
-    move_in_notes: Optional[str] = None
-    move_out_notes: Optional[str] = None
+class SummaryField(BaseModel):
+    label: str
+    value: str
+
+
+class DocumentSummary(BaseModel):
+    """
+    Key facts, shaped per document type. Leases get landlord/rent/dates, NDAs get
+    disclosing party/confidentiality term, employment contracts get salary/
+    non-compete, and so on. Rendered generically as label/value rows.
+    """
+    doc_type: str = ""
+    fields: List[SummaryField] = []
 
 
 class AnalysisResponse(BaseModel):
     meta: DocumentMeta
     safety: SafetyScore
     clauses: List[Clause]
-    summary: Optional[LeaseSummary] = None
+    summary: Optional[DocumentSummary] = None
 
 
 class ErrorResponse(BaseModel):

@@ -87,7 +87,9 @@ async def analyze(file: UploadFile = File(...)):
         )
 
     try:
-        analyzed_clauses, safety, summary = analyze_document(clauses_text, doc_type, full_text)
+        analyzed_clauses, safety, summary, n_analyzed = analyze_document(
+            clauses_text, doc_type, full_text
+        )
     except Exception as e:
         import traceback
         print("GROQ ERROR:", str(e))
@@ -106,6 +108,8 @@ async def analyze(file: UploadFile = File(...)):
         word_count=word_count,
         doc_type=doc_type,
         analysis_time_ms=elapsed,
+        clauses_found=len(clauses_text),
+        clauses_analyzed=n_analyzed,
     )
 
     return AnalysisResponse(meta=meta, safety=safety, clauses=analyzed_clauses, summary=summary)

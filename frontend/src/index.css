@@ -429,12 +429,20 @@ img { display: block; max-width: 100%; }
 
 .summary-row {
   display: grid;
-  grid-template-columns: 140px 1fr;
+  /* Wide enough for the longest labels across all document types
+     ("Confidentiality", "Non-solicitation", "Security deposit"). */
+  grid-template-columns: 170px 1fr;
   border-bottom: 0.5px solid var(--border-row);
   border-right: 0.5px solid var(--border-row);
 }
 
 .summary-row:nth-child(even) {
+  border-right: none;
+}
+
+/* Long prose values (move-out notes, obligations) get their own full row. */
+.summary-row--wide {
+  grid-column: 1 / -1;
   border-right: none;
 }
 
@@ -904,7 +912,14 @@ img { display: block; max-width: 100%; }
   .breakdown-sev { min-width: 78px; }
   .breakdown-label { min-width: 140px; font-size: 13px; }
   .summary-grid { grid-template-columns: 1fr; }
-  .summary-row { border-right: none; }
+  /* At phone width a label column is too narrow for longer labels
+     ("Confidentiality", "Security deposit"), so stack label above value. */
+  .summary-row { border-right: none; grid-template-columns: 1fr; }
+  .summary-label {
+    border-right: none;
+    padding: 10px 14px 0;
+  }
+  .summary-value { padding-top: 3px; }
   .summary-row:nth-last-child(-n+2) { border-bottom: 0.5px solid var(--border-row); }
   .summary-row:last-child { border-bottom: none; }
   .nav { padding: 0 16px; }
