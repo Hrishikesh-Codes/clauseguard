@@ -291,6 +291,75 @@ for text, _expected in CLAUSES:
     check(f"stable <- {text[:52]}", len(results) == 1)
 
 
+# ── 7. Sensitivity ─────────────────────────────────────────────────────────────
+# The weights are considered legal judgment, not measured constants. This checks
+# that the CONCLUSIONS do not depend on the exact numbers: perturb every severity
+# weight by +/-20% and the bands and ordering must still hold. It is not a
+# substitute for calibrating against documents rated by a real attorney, which
+# remains the main outstanding gap.
+print("\n7. SENSITIVITY (conclusions must survive +/-20% weight perturbation)")
+
+from dataclasses import replace as _dc_replace
+
+_ORIG_CONSTS = (scoring.CRITICAL, scoring.HIGH, scoring.MEDIUM, scoring.LOW, scoring.K)
+_ORIG_RULES = {
+    "risk": list(scoring.RISK_RULES),
+    "absence": list(scoring.ABSENCE_RULES),
+    "combo": list(scoring.COMBO_RULES),
+    "credit": list(scoring.CREDIT_RULES),
+}
+
+
+def _perturb(factor: float) -> None:
+    """Scale every severity weight, the credits and the curve constant."""
+    scoring.CRITICAL = max(1, round(_ORIG_CONSTS[0] * factor))
+    scoring.HIGH = max(1, round(_ORIG_CONSTS[1] * factor))
+    scoring.MEDIUM = max(1, round(_ORIG_CONSTS[2] * factor))
+    scoring.LOW = max(1, round(_ORIG_CONSTS[3] * factor))
+    scoring.K = max(1, round(_ORIG_CONSTS[4] * factor))
+    # Rules captured their weight at definition time, so rebuild each one.
+    for key, bucket in (("risk", scoring.RISK_RULES), ("absence", scoring.ABSENCE_RULES),
+                        ("combo", scoring.COMBO_RULES), ("credit", scoring.CREDIT_RULES)):
+        bucket[:] = [_dc_replace(r, weight=max(1, round(r.weight * factor)))
+                     for r in _ORIG_RULES[key]]
+
+
+def _restore() -> None:
+    (scoring.CRITICAL, scoring.HIGH, scoring.MEDIUM,
+     scoring.LOW, scoring.K) = _ORIG_CONSTS
+    scoring.RISK_RULES[:] = _ORIG_RULES["risk"]
+    scoring.ABSENCE_RULES[:] = _ORIG_RULES["absence"]
+    scoring.COMBO_RULES[:] = _ORIG_RULES["combo"]
+    scoring.CREDIT_RULES[:] = _ORIG_RULES["credit"]
+
+
+try:
+    for factor in (0.8, 1.2):
+        _perturb(factor)
+        results = {name: score_document(text, dt).score for name, text, dt, _b in ARCHETYPES}
+        weights_changed = scoring.RISK_RULES[0].weight != _ORIG_RULES["risk"][0].weight
+        _restore()
+        check(f"x{factor}: weights actually changed", weights_changed)
+        check(f"x{factor}: ordering preserved",
+              results["lease / tenant-friendly"] > results["lease / market-typical"] >
+              results["lease / predatory"] and
+              results["nda / fair"] > results["nda / predatory"] and
+              results["employment / fair"] > results["employment / predatory"],
+              str(results))
+        check(f"x{factor}: predatory stays below 60",
+              all(results[n] < 60 for n in ("lease / predatory", "nda / predatory",
+                                            "employment / predatory")), str(results))
+        check(f"x{factor}: fair stays at or above 80",
+              all(results[n] >= 80 for n in ("lease / tenant-friendly", "nda / fair",
+                                             "employment / fair")), str(results))
+finally:
+    _restore()
+
+_after = {name: score_document(text, dt).score for name, text, dt, _b in ARCHETYPES}
+check("baseline restored after perturbation",
+      _after == scores, f"{_after} vs {scores}")
+
+
 # ── Summary ────────────────────────────────────────────────────────────────────
 print("\n" + "=" * 70)
 print(f"rules: {len(scoring.RISK_RULES)} risk, {len(scoring.CREDIT_RULES)} credit, "

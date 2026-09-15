@@ -36,7 +36,8 @@ function Row({ item }: { item: DetectedItem }) {
 export default function RiskBreakdown({ safety }: Props) {
   const risks = safety.risks ?? []
   const benefits = safety.benefits ?? []
-  if (risks.length === 0 && benefits.length === 0) return null
+  const notes = safety.jurisdiction_notes ?? []
+  if (risks.length === 0 && benefits.length === 0 && notes.length === 0) return null
 
   return (
     <div className="breakdown">
@@ -52,6 +53,20 @@ export default function RiskBreakdown({ safety }: Props) {
         <div className="breakdown-group">
           <div className="breakdown-group-title">Risks found</div>
           {risks.map(r => <Row key={r.label} item={r} />)}
+        </div>
+      )}
+
+      {(safety.jurisdiction_notes ?? []).length > 0 && (
+        <div className="breakdown-group">
+          <div className="breakdown-group-title">
+            State law
+            {safety.jurisdiction && safety.jurisdiction !== 'Unknown' && (
+              <span className="breakdown-cat"> {safety.jurisdiction}</span>
+            )}
+          </div>
+          {(safety.jurisdiction_notes ?? []).map(note => (
+            <p key={note} className="breakdown-jx">{note}</p>
+          ))}
         </div>
       )}
 

@@ -810,6 +810,96 @@ def numeric_findings(text: str, already: set) -> List[Tuple[str, str, int, str]]
 
 
 
+# ── Jurisdiction ────────────────────────────────────────────────────────────────
+# The most valuable thing a reviewer says is often "that clause is void where you
+# live". These notes are INFORMATIONAL and deliberately do not change the score:
+# state law varies, changes often, and encoding shaky specifics as score weights
+# would reduce accuracy rather than improve it. Only well-established, stable
+# rules are included, each hedged and pointing the reader at their own state.
+
+STATES = [
+    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+    "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+    "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
+    "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
+    "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
+    "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina",
+    "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
+    "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
+    "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
+    "Wisconsin", "Wyoming", "District of Columbia",
+]
+
+# States where non-competes are generally unenforceable against employees.
+NONCOMPETE_BAN_STATES = ("California", "North Dakota", "Oklahoma", "Minnesota")
+
+
+@dataclass(frozen=True)
+class JurisdictionNote:
+    id: str
+    triggers: Tuple[str, ...]        # any of these findings must be present
+    states: Tuple[str, ...]          # empty tuple = applies in any state
+    note: str                        # "{state}" is substituted
+
+
+JURISDICTION_NOTES: List[JurisdictionNote] = [
+    JurisdictionNote(
+        "jx_noncompete_void",
+        ("noncompete_present", "noncompete_unlimited_geography",
+         "noncompete_long", "noncompete_very_long"),
+        NONCOMPETE_BAN_STATES,
+        "{state} generally does not enforce non-competes against employees, so this "
+        "restriction may not hold up. It is still worth asking them to remove it, "
+        "since its presence can discourage you from taking another job.",
+    ),
+    JurisdictionNote(
+        "jx_habitability_void",
+        ("waive_habitability",),
+        (),
+        "Waivers of the warranty of habitability are void in most states, including "
+        "{state}. A landlord asking you to sign one is worth treating as a warning "
+        "about how they operate.",
+    ),
+    JurisdictionNote(
+        "jx_jury_waiver_ca",
+        ("mandatory_arbitration",),
+        ("California",),
+        "California generally does not enforce a waiver of your right to a jury "
+        "trial agreed before any dispute arises. Confirm how this interacts with "
+        "the arbitration clause before relying on it.",
+    ),
+    JurisdictionNote(
+        "jx_entry_notice_required",
+        ("entry_no_notice", "missing_entry_notice", "entry_short_notice"),
+        ("California", "Oregon", "Washington", "Connecticut", "Delaware", "Maine"),
+        "{state} sets a minimum notice a landlord must give before entering, "
+        "regardless of what the lease says. Look up your state's required notice "
+        "period, as the lease cannot shorten it.",
+    ),
+]
+
+
+def detect_jurisdiction(text: str) -> str:
+    """First US state named in the document, or 'Unknown'."""
+    for state in STATES:
+        if state in text:
+            return state
+    return "Unknown"
+
+
+def jurisdiction_notes(finding_ids: set, jurisdiction: str) -> List[str]:
+    """Informational state-law notes for the findings present. Never scored."""
+    out: List[str] = []
+    for note in JURISDICTION_NOTES:
+        if note.states and jurisdiction not in note.states:
+            continue
+        if not any(t in finding_ids for t in note.triggers):
+            continue
+        where = jurisdiction if jurisdiction != "Unknown" else "your state"
+        out.append(note.note.replace("{state}", where))
+    return out
+
+
 GRADE_BANDS = [
     (85, "Low risk"),
     (70, "Moderate risk"),
@@ -836,6 +926,8 @@ class ScoreResult:
     credits: int
     confidence: str = "high"       # high | medium | low
     confidence_note: str = ""      # shown to the reader when not high
+    jurisdiction: str = "Unknown"
+    jurisdiction_notes: List[str] = field(default_factory=list)
     risks: List[DetectedRule] = field(default_factory=list)
     benefits: List[DetectedRule] = field(default_factory=list)
 
@@ -956,6 +1048,9 @@ def score_document(full_text: str, doc_type: Optional[str] = None) -> ScoreResul
             score = min(score, CAP_MEDIUM_CONFIDENCE)
         grade = _grade_for(score)
 
+    jurisdiction = detect_jurisdiction(full_text)
+    notes = jurisdiction_notes({i for i, _l, _w, _c in findings}, jurisdiction)
+
     risks = [
         DetectedRule(i, label, weight, cat, _severity_name(weight))
         for i, label, weight, cat in sorted(findings, key=lambda f: -f[2])
@@ -972,6 +1067,8 @@ def score_document(full_text: str, doc_type: Optional[str] = None) -> ScoreResul
         credits=credits_applied,
         confidence=confidence,
         confidence_note=note,
+        jurisdiction=jurisdiction,
+        jurisdiction_notes=notes,
         risks=risks,
         benefits=benefits,
     )
@@ -985,11 +1082,15 @@ def classify_clause(text: str) -> Tuple[str, int]:
     high / medium / standard / favorable and risk_score is 1-5.
     """
     risks, credits = match_rules(text)
+    # Include magnitude, so a clause naming a very large penalty or a long
+    # non-compete is graded on the amount rather than only on the phrase.
+    weights = [r.weight for r in risks]
+    weights += [w for _i, _l, w, _c in numeric_findings(text, {r.id for r in risks})]
 
-    if not risks:
+    if not weights:
         return ("favorable", 1) if credits else ("standard", 2)
 
-    worst = max(r.weight for r in risks)
+    worst = max(weights)
     if worst >= CRITICAL:
         return "high", 5
     if worst >= HIGH:

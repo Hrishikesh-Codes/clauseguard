@@ -62,8 +62,22 @@ export default function About() {
         <section className="about-section">
           <h2 className="about-subheading">Privacy</h2>
           <p className="about-body">
-            Your document is never stored. PDFs are processed in memory and discarded immediately after analysis.
-            We do not log document contents. No account is required. The app is fully stateless on the backend.
+            Your PDF is never written to disk. It is processed in memory, and the file itself is discarded
+            as soon as the text has been read. We do not log document contents, and no account is required.
+          </p>
+          <p className="about-body">
+            To avoid re-running an analysis you have already paid for in waiting time, the finished analysis
+            (not the PDF) is held in memory on the server for 15 minutes, keyed by a hash of the file. It is
+            capped at a couple of dozen documents, never written to disk, and cleared whenever the server restarts.
+          </p>
+          <p className="about-body">
+            Your analysis history is saved in your own browser so it survives a refresh. It never leaves your
+            device, and you can delete it at any time with the Clear history button on the History page.
+          </p>
+          <p className="about-body">
+            The action buttons at the bottom of a result (Draft appeal letter, Questions to ask, and the others)
+            open claude.ai in a new tab with the relevant clause text included in the link, so that text is sent
+            to Anthropic when you click one. Nothing is sent unless you choose to click.
           </p>
         </section>
 

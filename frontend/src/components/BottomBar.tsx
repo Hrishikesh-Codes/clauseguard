@@ -28,6 +28,10 @@ export default function BottomBar({ result }: Props) {
   ]
 
   return (
+    <div className="bottom-dock">
+    <div className="bottom-bar-note">
+      These open claude.ai in a new tab with the relevant clause text included.
+    </div>
     <div className="bottom-bar">
       {actions.map((action, i) => (
         <a
@@ -41,6 +45,7 @@ export default function BottomBar({ result }: Props) {
           {action.label}
         </a>
       ))}
+    </div>
     </div>
   )
 }

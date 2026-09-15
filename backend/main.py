@@ -1,5 +1,8 @@
+import hashlib
 import os
 import time
+from collections import OrderedDict
+from typing import Optional, Tuple
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
@@ -28,6 +31,38 @@ app.add_middleware(
 
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 
+# ── Result cache ────────────────────────────────────────────────────────────────
+# Groq allows only about 8000 tokens per minute and one analysis uses most of it,
+# so re-uploading the same document would otherwise burn the whole allowance and
+# rate-limit the next visitor. Keyed by a hash of the file bytes.
+#
+# Privacy: this holds ANALYSIS RESULTS ONLY, never the uploaded PDF, only in
+# memory, capped and short-lived. Nothing is written to disk. Restarting the
+# Space clears it.
+CACHE_TTL_SECONDS = 900   # 15 minutes
+CACHE_MAX_ENTRIES = 24
+
+_cache: "OrderedDict[str, Tuple[float, AnalysisResponse]]" = OrderedDict()
+
+
+def _cache_get(key: str) -> Optional[AnalysisResponse]:
+    entry = _cache.get(key)
+    if entry is None:
+        return None
+    stored_at, value = entry
+    if time.time() - stored_at > CACHE_TTL_SECONDS:
+        _cache.pop(key, None)
+        return None
+    _cache.move_to_end(key)   # least-recently-used ordering
+    return value
+
+
+def _cache_put(key: str, value: AnalysisResponse) -> None:
+    _cache[key] = (time.time(), value)
+    _cache.move_to_end(key)
+    while len(_cache) > CACHE_MAX_ENTRIES:
+        _cache.popitem(last=False)
+
 
 @app.get("/api/health")
 def health():
@@ -52,6 +87,13 @@ async def analyze(file: UploadFile = File(...)):
             status_code=400,
             detail={"error": "This file is too large. Please upload a PDF under 10MB.", "code": "TOO_LARGE"},
         )
+
+    # An identical file re-uploaded within the TTL is served from memory, which
+    # costs no tokens and leaves the rate limit free for other visitors.
+    cache_key = hashlib.sha256(content).hexdigest()
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     start_ms = int(time.time() * 1000)
 
@@ -112,4 +154,8 @@ async def analyze(file: UploadFile = File(...)):
         clauses_analyzed=n_analyzed,
     )
 
-    return AnalysisResponse(meta=meta, safety=safety, clauses=analyzed_clauses, summary=summary)
+    response = AnalysisResponse(
+        meta=meta, safety=safety, clauses=analyzed_clauses, summary=summary
+    )
+    _cache_put(cache_key, response)
+    return response

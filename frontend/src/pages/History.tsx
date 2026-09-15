@@ -5,7 +5,7 @@ import { formatFilename, formatDate } from '../utils/format'
 import { scoreColor } from '../utils/score'
 
 export default function History() {
-  const { history, loadFromHistory } = useAnalysis()
+  const { history, loadFromHistory, clearHistory } = useAnalysis()
   const navigate = useNavigate()
 
   const handleLoad = (result: Parameters<typeof loadFromHistory>[0]) => {
@@ -17,8 +17,19 @@ export default function History() {
     <div className="history-page">
       <Nav />
       <div className="history-content">
-        <h1 className="history-heading">History</h1>
-        <p className="history-subheading">Documents analyzed this session.</p>
+        <div className="history-head">
+          <div>
+            <h1 className="history-heading">History</h1>
+            <p className="history-subheading">
+              Saved in this browser only, never uploaded. Clearing removes it permanently.
+            </p>
+          </div>
+          {history.length > 0 && (
+            <button className="btn-clear-history" onClick={clearHistory}>
+              Clear history
+            </button>
+          )}
+        </div>
 
         {history.length === 0 ? (
           <div className="history-empty">

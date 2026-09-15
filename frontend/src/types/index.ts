@@ -36,6 +36,8 @@ export interface SafetyScore {
   grade?: string
   confidence?: 'high' | 'medium' | 'low'
   confidence_note?: string
+  jurisdiction?: string
+  jurisdiction_notes?: string[]
   risks?: DetectedItem[]
   benefits?: DetectedItem[]
 }

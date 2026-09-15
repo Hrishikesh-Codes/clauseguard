@@ -162,26 +162,6 @@ def build_user_prompt(
     return "\n".join(parts)
 
 
-def detect_jurisdiction(text: str) -> str:
-    """Try to find state/jurisdiction from document text."""
-    states = [
-        "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
-        "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
-        "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana",
-        "Maine", "Maryland", "Massachusetts", "Michigan", "Minnesota",
-        "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada",
-        "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina",
-        "North Dakota", "Ohio", "Oklahoma", "Oregon", "Pennsylvania",
-        "Rhode Island", "South Carolina", "South Dakota", "Tennessee", "Texas",
-        "Utah", "Vermont", "Virginia", "Washington", "West Virginia",
-        "Wisconsin", "Wyoming", "District of Columbia"
-    ]
-    for state in states:
-        if state in text:
-            return state
-    return "Unknown"
-
-
 def _strip_fences(raw: str) -> str:
     raw = re.sub(r"^```(?:json)?\s*", "", (raw or "").strip())
     return re.sub(r"\s*```$", "", raw)
@@ -208,7 +188,7 @@ def call_groq(
     """One batched, deterministic-as-possible call for clause prose."""
     client = Groq()
     user_prompt = build_user_prompt(
-        clauses, classifications, doc_type, detect_jurisdiction(full_text)
+        clauses, classifications, doc_type, scoring.detect_jurisdiction(full_text)
     )
     response = client.chat.completions.create(
         model=MODEL_ANALYSIS,
@@ -326,6 +306,8 @@ def compute_safety(clauses: List[Clause], full_text: str, doc_type: str = "") ->
         grade=result.grade,
         confidence=result.confidence,
         confidence_note=result.confidence_note,
+        jurisdiction=result.jurisdiction,
+        jurisdiction_notes=result.jurisdiction_notes,
         high_count=sum(1 for c in clauses if c.risk_level == "high"),
         medium_count=sum(1 for c in clauses if c.risk_level == "medium"),
         standard_count=sum(1 for c in clauses if c.risk_level == "standard"),
@@ -454,6 +436,101 @@ def _summary_prompt(spec: List[Tuple[str, str, str]], doc_type: str) -> str:
     )
 
 
+# Words to hunt for when pulling context for each summary field. The head of a
+# document carries the parties and dates, but move-out terms, renewal windows and
+# remedies are usually much further in, so reading only the first few thousand
+# characters made the summary report "not found" for terms that were present.
+SUMMARY_KEYWORDS: Dict[str, Tuple[str, ...]] = {
+    "move_out_notes":           ("move out", "move-out", "vacate", "surrender", "notice to vacate"),
+    "move_in_notes":            ("move in", "move-in", "occupancy", "checklist", "inspection"),
+    "late_fee":                 ("late fee", "late charge", "grace period"),
+    "security_deposit":         ("security deposit", "deposit"),
+    "payment_due_date":         ("due on", "payable", "first day", "due date"),
+    "monthly_rent":             ("rent", "per month", "monthly"),
+    "lease_end":                ("end", "expire", "termination date", "through"),
+    "lease_start":              ("begin", "commence", "start"),
+    "lease_term":               ("term", "months", "renewal"),
+    "confidentiality_duration": ("perpetuity", "expire", "survive", "period of"),
+    "non_solicit":              ("solicit", "no-hire", "hire any"),
+    "exclusions":               ("does not apply", "exclude", "public domain", "publicly available"),
+    "return_obligation":        ("return", "destroy", "certif"),
+    "remedies":                 ("liquidated damages", "injunctive", "remedy", "penalty"),
+    "governing_law":            ("governing law", "governed by", "jurisdiction", "venue"),
+    "non_compete":              ("non-compete", "noncompete", "competitive"),
+    "ip_terms":                 ("invention", "intellectual property", "work product", "assign"),
+    "notice_period":            ("notice", "days notice"),
+    "termination":              ("terminat", "resign", "severance"),
+    "compensation":             ("salary", "wage", "compensation", "per year"),
+    "bonus":                    ("bonus", "commission", "equity"),
+    "benefits":                 ("benefit", "paid time off", "vacation", "insurance"),
+    "hours":                    ("hours", "overtime", "exempt"),
+    "purchase_price":           ("purchase price", "total price", "sale price"),
+    "deposit":                  ("earnest", "deposit"),
+    "closing_date":             ("closing", "settlement"),
+    "contingencies":            ("contingen", "subject to"),
+    "inspection_period":        ("inspect",),
+    "as_is":                    ("as-is", "as is", "warrant"),
+    "liability_cap":            ("liability", "shall not exceed", "limited to"),
+    "payment_terms":            ("invoice", "payment", "net "),
+    "services":                 ("services", "scope of work", "deliverable"),
+    "key_obligations":          ("shall", "must", "responsible for"),
+    "term":                     ("term", "duration"),
+    "purpose":                  ("purpose", "in order to", "evaluate"),
+    "effective_date":           ("effective", "dated", "as of"),
+}
+
+# The head must stay generous so this is never WORSE than the old flat prefix for
+# a mid-length document; targeted windows then add coverage of the long tail.
+# Budget stays close to the old 4500 because the summary and the clause analysis
+# share the same tokens-per-minute allowance.
+SUMMARY_HEAD_CHARS = 2400
+SUMMARY_WINDOW = 320
+SUMMARY_BUDGET = 5000
+
+
+def build_summary_context(full_text: str, spec: List[Tuple[str, str, str]]) -> str:
+    """
+    The head of the document plus targeted windows around each field's keywords.
+    Keeps roughly the same token cost as reading a flat prefix, but covers terms
+    that appear late in a long document.
+    """
+    text = full_text or ""
+    if len(text) <= SUMMARY_BUDGET:
+        return text
+
+    spans: List[Tuple[int, int]] = [(0, SUMMARY_HEAD_CHARS)]
+    tail = text[SUMMARY_HEAD_CHARS:]
+    lowered = tail.lower()
+
+    for key, _label, _hint in spec:
+        for word in SUMMARY_KEYWORDS.get(key, (key.replace("_", " "),)):
+            at = lowered.find(word.lower())
+            if at == -1:
+                continue
+            centre = SUMMARY_HEAD_CHARS + at
+            spans.append((max(0, centre - SUMMARY_WINDOW // 2),
+                          min(len(text), centre + SUMMARY_WINDOW)))
+            break  # one window per field is enough
+
+    # Merge overlaps so the excerpt reads continuously and wastes no budget.
+    spans.sort()
+    merged: List[List[int]] = []
+    for lo, hi in spans:
+        if merged and lo <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], hi)
+        else:
+            merged.append([lo, hi])
+
+    out, used = [], 0
+    for lo, hi in merged:
+        if used >= SUMMARY_BUDGET:
+            break
+        piece = text[lo:hi][: SUMMARY_BUDGET - used]
+        out.append(piece)
+        used += len(piece)
+    return "\n[...]\n".join(out)
+
+
 def _clean_field(value: Any) -> Optional[str]:
     """Normalize one summary field. Numbers are coerced, not dropped."""
     if value is None or isinstance(value, bool):
@@ -478,7 +555,7 @@ def extract_summary(full_text: str, doc_type: str) -> DocumentSummary:
             model=MODEL_SUMMARY,
             messages=[
                 {"role": "system", "content": _summary_prompt(spec, doc_type)},
-                {"role": "user", "content": f"Extract the key facts from this document:\n\n{full_text[:4500]}"},
+                {"role": "user", "content": f"Extract the key facts from this document:\n\n{build_summary_context(full_text, spec)}"},
             ],
             temperature=TEMPERATURE,
             top_p=1,

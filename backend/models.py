@@ -42,6 +42,9 @@ class SafetyScore(BaseModel):
     # reader is told, rather than being shown a confident-looking number.
     confidence: str = "high"
     confidence_note: str = ""
+    # State law context. Informational only, never folded into the score.
+    jurisdiction: str = "Unknown"
+    jurisdiction_notes: List[str] = []
     risks: List[DetectedItem] = []
     benefits: List[DetectedItem] = []
 
