@@ -291,6 +291,61 @@ for text, _expected in CLAUSES:
     check(f"stable <- {text[:52]}", len(results) == 1)
 
 
+# ── 6b. Jurisdiction ───────────────────────────────────────────────────────────
+print("\n6b. JURISDICTION (real exposure depends on where you signed)")
+
+NC_DOMINANT = """EMPLOYMENT AGREEMENT governed by the laws of the State of {ST}.
+Employer: Initech LLC. Employee: Sam Lee. Position: Analyst. Start date March 1, 2026.
+Salary shall be $110,000 per year with standard benefits and paid time off.
+1. For twenty-four (24) months after separation, Employee shall not engage in any
+business competitive with Employer anywhere in the United States.
+2. Employee shall notify any prospective employer of these restrictions.
+3. Either party may terminate this agreement with thirty (30) days notice.
+4. Employee is classified as non-exempt and receives overtime over 40 hours.
+5. Prior inventions listed on Schedule A are excluded and shall not be assigned.
+6. Nothing in this Agreement shall prohibit Employee from reporting possible
+violations of law to any government agency.
+7. The prevailing party in any dispute shall be awarded reasonable attorney's fees."""
+
+_nc = {st: score_document(NC_DOMINANT.replace("{ST}", st), "Employment Contract")
+       for st in ("Texas", "Florida", "California", "Minnesota", "Oklahoma", "North Dakota")}
+
+for st in ("California", "Minnesota", "Oklahoma", "North Dakota"):
+    check(f"{st}: void non-compete scores well ({_nc[st].score})", _nc[st].score >= 85,
+          f"got {_nc[st].score}")
+for st in ("Texas", "Florida"):
+    check(f"{st}: enforceable non-compete scores badly ({_nc[st].score})", _nc[st].score <= 60,
+          f"got {_nc[st].score}")
+check("ban states differ materially from enforcing states",
+      _nc["California"].score - _nc["Texas"].score >= 25,
+      f"spread {_nc['California'].score - _nc['Texas'].score}")
+
+# Arbitration must NOT be discounted in California: the Federal Arbitration Act
+# preempts state law on arbitration, so the clause still binds even though a
+# pre-dispute jury waiver alone would not.
+_arb = """EMPLOYMENT AGREEMENT governed by the laws of the State of {ST}.
+Employer: Globex. Employee: Jo. Position: Engineer. Start date January 1, 2026.
+Salary $120,000 per year. Employee waives any right to a jury trial and agrees to
+binding arbitration, waiving class action participation."""
+_w = {}
+for st in ("Texas", "California"):
+    r = score_document(_arb.replace("{ST}", st), "Employment Contract")
+    _w[st] = [x.weight for x in r.risks if x.id == "mandatory_arbitration"]
+check("arbitration weight unchanged in California (FAA preempts)",
+      _w["Texas"] == _w["California"] and _w["California"],
+      f"TX {_w['Texas']} vs CA {_w['California']}")
+
+# A discount must never erase a finding entirely.
+_ca = _nc["California"]
+check("discounted findings still present, not deleted",
+      any("noncompete" in x.id for x in _ca.risks) and all(x.weight >= 1 for x in _ca.risks))
+
+# Jurisdiction must not break determinism.
+for st in ("California", "Texas"):
+    _h = {fingerprint(NC_DOMINANT.replace("{ST}", st), "Employment Contract") for _ in range(100)}
+    check(f"{st}: deterministic with jurisdiction applied", len(_h) == 1)
+
+
 # ── 7. Sensitivity ─────────────────────────────────────────────────────────────
 # The weights are considered legal judgment, not measured constants. This checks
 # that the CONCLUSIONS do not depend on the exact numbers: perturb every severity

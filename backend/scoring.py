@@ -812,10 +812,25 @@ def numeric_findings(text: str, already: set) -> List[Tuple[str, str, int, str]]
 
 # ── Jurisdiction ────────────────────────────────────────────────────────────────
 # The most valuable thing a reviewer says is often "that clause is void where you
-# live". These notes are INFORMATIONAL and deliberately do not change the score:
-# state law varies, changes often, and encoding shaky specifics as score weights
-# would reduce accuracy rather than improve it. Only well-established, stable
-# rules are included, each hedged and pointing the reader at their own state.
+# live", and real exposure is probability multiplied by impact: a provision that
+# a statute makes void is far less likely to ever be enforced against you. So
+# state law both raises notes AND can reduce a finding's weight.
+#
+# Two deliberate constraints:
+#   - Adjustment is one-directional. Base weights already assume a provision is
+#     enforceable, so jurisdiction can only discount, never inflate. Inventing
+#     extra penalties per state would need grounding the engine does not have.
+#   - A discount never reaches zero. You may have to assert the protection to
+#     benefit from it, the clause still discourages you from acting, and its
+#     presence says something about how the other side operates.
+#
+# Only well-established, stable rules are encoded. Notably NOT discounted:
+#   - Arbitration in California. The pre-dispute jury waiver is unenforceable
+#     there, but the Federal Arbitration Act preempts state law on arbitration
+#     itself, so the clause still binds. Discounting it would be wrong.
+#   - Habitability waivers. Void in nearly every state, so they are the baseline
+#     everywhere; discounting universally would shift nothing relative, and the
+#     value of the finding is as a signal about the landlord.
 
 STATES = [
     "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
@@ -877,6 +892,73 @@ JURISDICTION_NOTES: List[JurisdictionNote] = [
         "period, as the lease cannot shorten it.",
     ),
 ]
+
+
+@dataclass(frozen=True)
+class JurisdictionDiscount:
+    id: str
+    targets: Tuple[str, ...]   # finding ids whose weight is reduced
+    states: Tuple[str, ...]
+    factor: float              # multiplier, never 0
+    reason: str                # "{state}" is substituted
+
+
+ENTRY_NOTICE_FLOOR_STATES = (
+    "California", "Oregon", "Washington", "Connecticut", "Delaware", "Maine",
+)
+
+JURISDICTION_DISCOUNTS: List[JurisdictionDiscount] = [
+    JurisdictionDiscount(
+        "dx_noncompete_void",
+        targets=("noncompete_present", "noncompete_unlimited_geography",
+                 "noncompete_long", "noncompete_very_long",
+                 "combo_employment_asymmetry", "notify_new_employer"),
+        states=NONCOMPETE_BAN_STATES,
+        factor=0.35,
+        reason="not enforceable in {state}",
+    ),
+    JurisdictionDiscount(
+        "dx_entry_statutory_floor",
+        targets=("entry_no_notice", "missing_entry_notice", "entry_short_notice"),
+        states=ENTRY_NOTICE_FLOOR_STATES,
+        factor=0.6,
+        reason="{state} law sets a minimum notice regardless",
+    ),
+]
+
+
+def apply_jurisdiction(
+    findings: List[Tuple[str, str, int, str]], jurisdiction: str
+) -> Tuple[List[Tuple[str, str, int, str]], List[str]]:
+    """
+    Reduce the weight of findings that state law makes largely unenforceable.
+    Returns the adjusted findings and a note for each discount that applied.
+    """
+    active = [d for d in JURISDICTION_DISCOUNTS if jurisdiction in d.states]
+    if not active:
+        return findings, []
+
+    adjusted: List[Tuple[str, str, int, str]] = []
+    applied: Dict[str, int] = {}
+    for fid, label, weight, category in findings:
+        discount = next((d for d in active if fid in d.targets), None)
+        if discount is None:
+            adjusted.append((fid, label, weight, category))
+            continue
+        reduced = max(1, round(weight * discount.factor))
+        reason = discount.reason.replace("{state}", jurisdiction)
+        # Say so on the finding itself, so a lowered severity badge is explained
+        # where the reader sees it.
+        adjusted.append((fid, f"{label} ({reason})", reduced, category))
+        applied[discount.id] = applied.get(discount.id, 0) + 1
+
+    notes = [
+        f"{count} finding{'' if count == 1 else 's'} scored lower because "
+        f"{d.reason.replace('{state}', jurisdiction)}."
+        for d in active
+        if (count := applied.get(d.id, 0))
+    ]
+    return adjusted, notes
 
 
 def detect_jurisdiction(text: str) -> str:
@@ -1029,6 +1111,11 @@ def score_document(full_text: str, doc_type: Optional[str] = None) -> ScoreResul
         if all(req in fired for req in combo.requires):
             findings.append((combo.id, combo.label, combo.weight, combo.category))
 
+    jurisdiction = detect_jurisdiction(full_text)
+    notes = jurisdiction_notes({i for i, _l, _w, _c in findings}, jurisdiction)
+    findings, discount_notes = apply_jurisdiction(findings, jurisdiction)
+    notes += discount_notes
+
     penalty = sum(weight for _i, _l, weight, _c in findings)
     credits_applied = min(sum(r.weight for r in credit_rules), MAX_CREDITS)
 
@@ -1047,9 +1134,6 @@ def score_document(full_text: str, doc_type: Optional[str] = None) -> ScoreResul
         if confidence == "medium":
             score = min(score, CAP_MEDIUM_CONFIDENCE)
         grade = _grade_for(score)
-
-    jurisdiction = detect_jurisdiction(full_text)
-    notes = jurisdiction_notes({i for i, _l, _w, _c in findings}, jurisdiction)
 
     risks = [
         DetectedRule(i, label, weight, cat, _severity_name(weight))
